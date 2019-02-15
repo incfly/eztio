@@ -1,28 +1,35 @@
-#!/bin/bash
+export GATEWAY_IP="${GATEWAY_IP:-35.238.212.236}"
+export SERVICE_HOST="${SERVICE_HOST-productpage.default.svc.cluster.local}"
+export SERVICE_IP="${SERVICE_IP-10.51.248.227}"
 
 # This script is supposed to run on a GCE instance.
 function setup() {
-  if [[ -z "${GATEWAY_IP}"]]; then
-    echo "Please set GATEWAY_IP"
-    return
-  fi
+  # if [[ -z "${GATEWAY_IP}"]]
+  # then
+  #   echo "Please set GATEWAY_IP"
+  #   return
+  # fi
   # for f in "root-cert.pe" "" ""; do
   #   if [[ ! -f $f ]]; then
   #     echo "Ensure file exists, $f"
   #   fi
   # done
-  sudo su
+  # Clean up first.
+  # sudo su
+  stop_workload
   curl https://storage.googleapis.com/istio-release/releases/1.1.0-snapshot.6/deb/istio-sidecar.deb  -L > istio-sidecar.deb
   dpkg -i istio-sidecar.deb
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" >> /etc/hosts
-  echo "$PRODUCT_PAGE_IP productpage.default.svc.cluster.local" >> /etc/hosts
   mkdir -p /etc/certs
   cp {root-cert.pem,cert-chain.pem,key.pem} /etc/certs
   cp cluster.env /var/lib/istio/envoy
+  systemctl start istio
+  systemctl start istio-auth-node-agent
   # Then kill this...
-  node_agent
+  # node_agent
 }
 
+# echo "$PRODUCT_PAGE_IP productpage.default.svc.cluster.local" >> /etc/hosts
 function add_kube_service() {
   if [[ -z "${SERVICE_HOST}" || -z "${SERVICE_IP}" ]]; then
     echo "Empty SERVICE_HOST or SERVICE_IP, please set."
@@ -31,8 +38,35 @@ function add_kube_service() {
   echo "Add service from kubernetes clusters to the VM, Host ${SERVICE_HOST} ${SERVICE_IP}"
   sudo echo "${SERVICE_IP} ${SERVICE_HOST}" >> /etc/hosts
 }
+
 function stop_workload() {
-  systemctl stop istio
-  systemctl stop istio-auth-node-agent
-  # TODO, remove all /etc/hosts stuff.
+  sudo systemctl stop istio
+  sudo systemctl stop istio-auth-node-agent
+  sudo sed -i  '/istio\|cluster.local/d' /etc/hosts
 }
+
+# Usage:
+# - Deploy the GCE VM first.
+# - Setup Istio sidecar and node agent on the VM first, `sudo bash ./gce-setup.sh  setup`
+# - Add a Kubernete service in to /etc/hosts for resolution: `sudo bash ./gce-setup.sh  addservice`
+# - Clean up the VM environment, `sudo bash ./gce-setup.sh cleanup`
+# Status: clean up is not tested, first several works, may not be in a clean state
+# TODO: remove all hardcoded environment variable, and make them configurable.
+if [[ $# -ne 1 ]]; then
+  echo "Usage: ./setup.sh cleanup | setup"
+  return
+fi
+
+case $1 in
+  setup)
+	   setup
+		 ;;
+
+  addservice)
+    add_kube_service
+    ;;
+
+	cleanup)
+	  cleanup
+		;;
+esac

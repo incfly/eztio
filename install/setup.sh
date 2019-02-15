@@ -63,12 +63,12 @@ function install_istio() {
 
 
 function prepare_gce_config() {
-  GWIP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  echo $GWIP
+  GATEWAY_IP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo $GATEWAY_IP
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $zone --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
   # TODO: Make this configurable.
-  echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
+  # echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
 
   kubectl -n istio-system get secrets istio.default  \
     -o jsonpath='{.data.root-cert\.pem}' |base64 --decode > root-cert.pem
@@ -77,7 +77,7 @@ function prepare_gce_config() {
   kubectl -n istio-system get secrets istio.default  \
         -o jsonpath='{.data.cert-chain\.pem}' |base64 --decode > cert-chain.pem
   
-   gcloud compute scp gce-setup.sh cert-chain.pem root-cert.pem cluster.env istio-vm:/home/jianfeih
+   gcloud compute scp gce-setup.sh cert-chain.pem root-cert.pem cluster.env key.pem istio-vm:/home/jianfeih
 }
 
 # Deploy bookinfo in two clusters.
