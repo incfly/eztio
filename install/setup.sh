@@ -5,9 +5,7 @@ export GCE_NAME="${GCE_NAME:-istio-vm}"
 export RELEASE="${RELEASE:-release-1.1-20190209-09-16}"
 export VM_SCRIPT_URL="https://raw.githubusercontent.com/incfly/istio-gce/master/install/gce-setup.sh"
 
-# Status: VM -> productpage:9080 works now.
-# TODO: product page to VM!
-
+# Status: VM -> productpage:9080 works and sleep curl VM works as well.
 # We must create clusters sequentially without specifying --async, otherwise will fail.
 function create_clusters() {
   echo "Create GKE cluster, name ${CLUSTER_NAME}"
@@ -67,8 +65,7 @@ function prepare_gce_config() {
   echo $GATEWAY_IP
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $zone --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
-  # TODO: Make this configurable.
-  # echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
+  echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
 
   kubectl -n istio-system get secrets istio.default  \
     -o jsonpath='{.data.root-cert\.pem}' |base64 --decode > root-cert.pem
@@ -87,10 +84,29 @@ function deploy_bookinfo() {
 	kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 	kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
 	PRODUCT_PAGE_IP=$(kubectl get svc productpage -o jsonpath='{.spec.clusterIP}')
-	# kubectl delete deployment reviews-v3
-	# kubectl config use-context "gke_${proj}_${zone}_${cluster2}"
-	# kubectl apply -f ../../reviews-v3.yaml
 	popd
+}
+
+function add_vmservice() {
+	kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: vmhttp
+spec:
+   hosts:
+   - vmhttp.default.svc.cluster.local
+   ports:
+   - number: 8080
+     name: http
+     protocol: HTTP
+   resolution: STATIC
+   endpoints:
+    - address: 10.128.15.222
+      ports:
+        http: 8080
+EOF
+  bin/istioctl  register vmhttp 10.128.15.222 8080
 }
 
 function get_verify_info() {

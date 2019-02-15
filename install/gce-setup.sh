@@ -45,6 +45,12 @@ function stop_workload() {
   sudo sed -i  '/istio\|cluster.local/d' /etc/hosts
 }
 
+# TODO: not tested yet.
+function start_helloworld() {
+  kill $(ps aux | grep 'SimpleHTTPServer' | awk '{print $2}')
+  python -m SimpleHTTPServer 8080 > http-server.output 2>&1 &
+}
+
 # Usage:
 # - Deploy the GCE VM first.
 # - Setup Istio sidecar and node agent on the VM first, `sudo bash ./gce-setup.sh  setup`
