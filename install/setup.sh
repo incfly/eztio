@@ -2,8 +2,11 @@ export proj="${proj:-jianfeih-test}"
 export zone="${zone:-us-central1-a}"
 export CLUSTER_NAME="${CLUSTER_NAME:-istio-meshexp}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export RELEASE="${RELEASE:-release-1.1-20190209-09-16}"
 export VM_SCRIPT_URL="https://raw.githubusercontent.com/incfly/istio-gce/master/install/gce-setup.sh"
+export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-osx.tar.gz"
+export OUT_DIR="tmp"
+# TODO: fix this hardcoding.
+ISTIO_ROOT="${OUT_DIR}/istio-1.1.0-snapshot.6"
 
 # Status: VM -> productpage:9080 works and sleep curl VM works as well.
 # We must create clusters sequentially without specifying --async, otherwise will fail.
@@ -28,26 +31,20 @@ function create_cluster_admin() {
     --user=$(gcloud config get-value core/account) || true
 }
 
-# TODO: reuse from perf/istio/setup.sh
 function download() {
-  local DIRNAME="$1"
-	rm -rf $DIRNAME && mkdir $DIRNAME
-	https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/
-  local url="https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/${RELEASE}/istio-${RELEASE}-linux.tar.gz"
-  local outfile="${DIRNAME}/istio-${RELEASE}.tgz"
-
+	rm -rf $OUT_DIR && mkdir $OUT_DIR
+  local outfile="${OUT_DIR}/istio-download.tgz"
   if [[ ! -f "${outfile}" ]]; then
-    wget –quiet -O "${outfile}" "${url}"
+    wget –quiet -O "${outfile}" "${DOWNLOAD_URL}"
   fi
-
-  echo "${outfile}"
+  tar xf $outfile -C ${OUT_DIR}
+  echo $outfile
 }
 
 function install_istio() {
 	kubectl config use-context "gke_${proj}_${zone}_${CLUSTER_NAME}"
-	istio_tar=$(download ./tmp $RELEASE)
-	tar xf $istio_tar -C ./tmp
-	pushd tmp/istio-${RELEASE}
+	download
+  pushd $ISTIO_ROOT
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
 	helm repo add istio.io "https://storage.googleapis.com/istio-prerelease/daily-build/master-latest-daily/charts"
 	helm dep update install/kubernetes/helm/istio
@@ -79,7 +76,7 @@ function prepare_gce_config() {
 
 # Deploy bookinfo in two clusters.
 function deploy_bookinfo() {
-	pushd tmp/istio-${RELEASE}
+	pushd $ISTIO_ROOT
 	kubectl config use-context "gke_${proj}_${zone}_${CLUSTER_NAME}"
 	kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 	kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
@@ -87,29 +84,45 @@ function deploy_bookinfo() {
 	popd
 }
 
-function add_vmservice() {
+# add_vmservice $service_name $ip $port
+# add_vmservice vmhttp 10.128.15.222 8080
+function add_service() {
+  svc=$1
+  ip=$2
+  port=$3
 	kubectl apply -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: ServiceEntry
 metadata:
-  name: vmhttp
+  name: ${svc}
 spec:
    hosts:
-   - vmhttp.default.svc.cluster.local
+   - ${svc}.default.svc.cluster.local
    ports:
-   - number: 8080
+   - number: $port
      name: http
      protocol: HTTP
    resolution: STATIC
    endpoints:
-    - address: 10.128.15.222
+    - address: $ip
       ports:
-        http: 8080
+        http: ${port}
 EOF
-  bin/istioctl  register vmhttp 10.128.15.222 8080
+  # bin/istioctl  register vmhttp 10.128.15.222 8080
+  $ISTIO_ROOT/bin/istioctl register $svc $ip $port
 }
 
-function get_verify_info() {
+# remove_service vmhttp 10.128.15.222 8080
+function remove_service() {
+  svc=$1
+  ip=$2
+  kubectl delete ServiceEntry $svc
+  $ISTIO_ROOT/bin/istioctl deregister $svc $ip
+}
+
+# k2vm vmhttp:8080
+function k2vm() {
+  kubectl exec -it $(kubectl get po  -l app=sleep -ojsonpath='{.items[0].metadata.name}') -- curl $1
 }
 
 # TODO: bookinfo is not mentioned in the new guide.
@@ -134,15 +147,26 @@ function do_all() {
 	# get_verify_url
 }
 
-if [[ $# -ne 1 ]]; then
-  echo "Usage: ./setup.sh cleanup | setup"
-  return
-fi
-
 case $1 in
   setup)
 	   do_all
 		 ;;
+
+  add_service)
+    add_service "${@:2}"
+    ;;
+
+  remove_service)
+    remove_service "${@:2}"
+    ;;
+
+  k2vm)
+    k2vm "${@:2}"
+    ;;
+
+  vm2k)
+    vm2k "${@:2}"
+    ;;
 
 	cleanup)
 	  cleanup
