@@ -51,6 +51,11 @@ function start_helloworld() {
   python -m SimpleHTTPServer 8080 > http-server.output 2>&1 &
 }
 
+function echo_env() {
+  echo $2
+  echo $ECHO_ENV
+}
+
 # Usage:
 # - Deploy the GCE VM first.
 # - Setup Istio sidecar and node agent on the VM first, `sudo bash ./gce-setup.sh  setup`
@@ -58,21 +63,19 @@ function start_helloworld() {
 # - Clean up the VM environment, `sudo bash ./gce-setup.sh cleanup`
 # Status: clean up is not tested, first several works, may not be in a clean state
 # TODO: remove all hardcoded environment variable, and make them configurable.
-if [[ $# -ne 1 ]]; then
-  echo "Usage: ./setup.sh cleanup | setup"
-  return
-fi
+echo_env
 
 case $1 in
   setup)
 	   setup
-		 ;;
+     ;;
 
   addservice)
     add_kube_service
     ;;
 
 	cleanup)
-	  cleanup
-		;;
+    cleanup
+    ;;
+
 esac

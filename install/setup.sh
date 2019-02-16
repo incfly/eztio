@@ -57,7 +57,7 @@ function install_istio() {
 }
 
 
-function prepare_gce_config() {
+function update_vmconfig() {
   GATEWAY_IP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
   echo $GATEWAY_IP
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $zone --format "value(servicesIpv4Cidr)")
@@ -151,6 +151,10 @@ case $1 in
   setup)
 	   do_all
 		 ;;
+
+  update_vmconfig)
+     update_vmconfig
+     ;;
 
   add_service)
     add_service "${@:2}"
