@@ -6,7 +6,11 @@ export VM_SCRIPT_URL="https://raw.githubusercontent.com/incfly/istio-gce/master/
 export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-osx.tar.gz"
 export OUT_DIR="tmp"
 # TODO: fix this hardcoding.
-ISTIO_ROOT="${OUT_DIR}/istio-1.1.0-snapshot.6"
+export ISTIO_ROOT="${OUT_DIR}/istio-1.1.0-snapshot.6"
+
+export GATEWAY_IP="${GATEWAY_IP:-35.238.212.236}"
+export VM_SERVICE_HOST="${SERVICE_HOST-productpage.default.svc.cluster.local}"
+export VM_SERVICE_IP="${SERVICE_IP-10.51.248.227}"
 
 # Status: VM -> productpage:9080 works and sleep curl VM works as well.
 # We must create clusters sequentially without specifying --async, otherwise will fail.
@@ -58,7 +62,7 @@ function install_istio() {
 
 
 function update_vmconfig() {
-  GATEWAY_IP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  export GATEWAY_IP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
   echo $GATEWAY_IP
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $zone --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
@@ -147,13 +151,25 @@ function do_all() {
 	# get_verify_url
 }
 
+
+function gce_setup() {
+  vm_config=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
+  printenv
+  echo "Passing config to VM $vm_config"
+  gcloud compute ssh ${GCE_NAME} -- "$vm_config bash ~/gce-setup.sh $@"
+}
+
 case $1 in
   setup)
-	   do_all
-		 ;;
+    do_all
+    ;;
 
   update_vmconfig)
      update_vmconfig
+     ;;
+
+   gce-setup)
+     gce_setup "${@:2}"
      ;;
 
   add_service)
@@ -171,8 +187,8 @@ case $1 in
   vm2k)
     vm2k "${@:2}"
     ;;
-
-	cleanup)
-	  cleanup
-		;;
+  
+  cleanup)
+    cleanup
+    ;;
 esac

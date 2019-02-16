@@ -52,8 +52,7 @@ function start_helloworld() {
 }
 
 function echo_env() {
-  echo $2
-  echo $ECHO_ENV
+  echo "env is " $ECHO_ENV
 }
 
 # Usage:
@@ -67,7 +66,7 @@ echo_env
 
 case $1 in
   setup)
-	   setup
+    setup
      ;;
 
   addservice)
