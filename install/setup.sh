@@ -3,7 +3,7 @@ export zone="${zone:-us-central1-a}"
 export CLUSTER_NAME="${CLUSTER_NAME:-istio-meshexp}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
 export VM_SCRIPT_URL="https://raw.githubusercontent.com/incfly/istio-gce/master/install/gce-setup.sh"
-export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-osx.tar.gz"
+export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-linux.tar.gz"
 export OUT_DIR="tmp"
 # TODO: fix this hardcoding.
 export ISTIO_ROOT="${OUT_DIR}/istio-1.1.0-snapshot.6"
@@ -23,9 +23,18 @@ function create_clusters() {
 	gcloud container clusters create $CLUSTER_NAME --zone $zone --username "admin" \
 --machine-type "n1-standard-2" --image-type "COS" --disk-size "100" \
 --scopes $scope --num-nodes "4" --network "default" --enable-cloud-logging --enable-cloud-monitoring
+  # create_gce ${GCE_NAME}
+}
 
-  echo "Create GCE instance, ${GCE_NAME}..."
-  gcloud compute instances create ${GCE_NAME}
+# Create a GCE instance with container optimized image selection.
+# Make gcr.io/PROJECT-ID public for now...
+function create_gce() {
+  name=$1
+  echo "Create GCE instance, ${name}..."
+  gcloud compute instances create ${GCE_NAME} \
+    --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
+  # On VM... (tag is needed), latest does not work.
+  # docker run --rm gcr.io/jianfeih-test/productcatalogservice:2f7240f
 }
 
 function create_cluster_admin() {
@@ -33,6 +42,10 @@ function create_cluster_admin() {
 	kubectl create clusterrolebinding cluster-admin-binding \
     --clusterrole=cluster-admin \
     --user=$(gcloud config get-value core/account) || true
+}
+
+function vm_instance_ip() {
+  gcloud compute instances describe ${GCE_NAME} | grep networkIP | sed 's/ //g'  | cut -d':' -f2
 }
 
 function download() {
@@ -50,7 +63,7 @@ function install_istio() {
 	download
   pushd $ISTIO_ROOT
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
-	helm repo add istio.io "https://storage.googleapis.com/istio-prerelease/daily-build/master-latest-daily/charts"
+	helm repo add istio.io "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
 	helm dep update install/kubernetes/helm/istio
 	helm template install/kubernetes/helm/istio --name istio --namespace istio-system \
   --set global.meshExpansion.enabled=true > ./istio.yaml
@@ -89,11 +102,12 @@ function deploy_bookinfo() {
 }
 
 # add_vmservice $service_name $ip $port
-# add_vmservice vmhttp 10.128.15.222 8080
+# add_vmservice vmhttp 10.128.15.222 8080 HTTP
 function add_service() {
   svc=$1
   ip=$2
   port=$3
+  protocol=$4
 	kubectl apply -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: ServiceEntry
@@ -105,7 +119,7 @@ spec:
    ports:
    - number: $port
      name: http
-     protocol: HTTP
+     protocol: ${protocol}
    resolution: STATIC
    endpoints:
     - address: $ip
