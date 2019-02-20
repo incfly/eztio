@@ -76,5 +76,7 @@ case $1 in
 	cleanup)
     cleanup
     ;;
-
+  *)
+    echo "No option selected, run setup..." && setup
+    ;;
 esac

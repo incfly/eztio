@@ -50,18 +50,20 @@ function vm_instance_ip() {
 }
 
 function download() {
-	rm -rf $OUT_DIR && mkdir $OUT_DIR
+  outdir=$1
+  download_url=$2
   local outfile="${OUT_DIR}/istio-download.tgz"
   if [[ ! -f "${outfile}" ]]; then
-    wget –quiet -O "${outfile}" "${DOWNLOAD_URL}"
+    wget –quiet -O "${outfile}" "${download_url}"
   fi
   tar xf $outfile -C ${OUT_DIR}
   echo $outfile
 }
 
 function install_istio() {
+  rm -rf ${OUT_DIR} && mkdir ${OUT_DIR}
 	kubectl config use-context "gke_${proj}_${zone}_${CLUSTER_NAME}"
-	download
+	download ${OUT_DIR} ${DOWNLOAD_URL}
   pushd $ISTIO_ROOT
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
 	helm repo add istio.io "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
@@ -76,8 +78,7 @@ function install_istio() {
 
 
 function update_vmconfig() {
-  export GATEWAY_IP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  echo $GATEWAY_IP
+  vm=$1
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $zone --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
   echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
@@ -89,7 +90,7 @@ function update_vmconfig() {
   kubectl -n istio-system get secrets istio.default  \
         -o jsonpath='{.data.cert-chain\.pem}' |base64 --decode > cert-chain.pem
   
-   gcloud compute scp gce-setup.sh cert-chain.pem root-cert.pem cluster.env key.pem istio-vm:/home/jianfeih
+   gcloud compute scp gce-setup.sh cert-chain.pem root-cert.pem cluster.env key.pem ${vm}:~
 }
 
 # Deploy bookinfo in two clusters.
@@ -166,25 +167,20 @@ function setup() {
 
 
 function gce_setup() {
-  vm_config=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
-  # printenv
-  echo "Passing config to VM $vm_config"
-  gcloud compute ssh ${GCE_NAME} -- "$vm_config bash ~/gce-setup.sh $@"
+  update_vmconfig ${GCE_NAME}
+  vmenv=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
+  echo "Passing env var to VM $vmenv"
+  gcloud compute ssh ${GCE_NAME} -- "$vmenv bash ~/gce-setup.sh $@"
 }
 
 # example vm_exec docker run -d  -p 3550:3550  gcr.io/jianfeih-test/productcatalogservice:2f7240f
 function vm_exec() {
-  # vm_config=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
   gcloud compute ssh ${GCE_NAME} -- "$@"
 }
 
 case $1 in
   setup)
     setup
-    ;;
-
-  update_vmconfig)
-    update_vmconfig
     ;;
 
   vm_exec)
@@ -215,7 +211,7 @@ case $1 in
     cleanup
     ;;
 
-  *)
-      echo $"Usage: $0 {setup|cleanup|vm2k|k2vm|update_vmconfig}"
+*)
+      echo $"Usage: $0 {setup|cleanup|vm2k|k2vm|gce_setup}"
       exit 1
 esac
