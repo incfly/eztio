@@ -1,5 +1,5 @@
-export proj="${proj:-jianfeih-test}"
-export zone="${zone:-us-central1-a}"
+export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
+export GCP_ZONE="${zone:-us-central1-a}"
 export CLUSTER_NAME="${CLUSTER_NAME:-istio-meshexp}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
 export VM_SCRIPT_URL="https://raw.githubusercontent.com/incfly/istio-gce/master/install/gce-setup.sh"
@@ -25,6 +25,11 @@ function create_clusters() {
 	gcloud container clusters create $cluster --zone $zone --username "admin" \
 --machine-type "n1-standard-2" --image-type "COS" --disk-size "100" \
 --scopes $scope --num-nodes "4" --network "default" --enable-cloud-logging --enable-cloud-monitoring
+
+  gcloud container clusters get-credentials $CLUSTER_NAME --zone $zone
+	kubectl create clusterrolebinding cluster-admin-binding \
+    --clusterrole=cluster-admin \
+    --user=$(gcloud config get-value core/account) || true
 }
 
 # Create a GCE instance with container optimized image selection.
@@ -36,13 +41,6 @@ function create_gce() {
     --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
   # On VM... (tag is needed), latest does not work.
   # docker run --rm gcr.io/jianfeih-test/productcatalogservice:2f7240f
-}
-
-function create_cluster_admin() {
-	gcloud container clusters get-credentials $CLUSTER_NAME --zone $zone
-	kubectl create clusterrolebinding cluster-admin-binding \
-    --clusterrole=cluster-admin \
-    --user=$(gcloud config get-value core/account) || true
 }
 
 function vm_instance_ip() {
@@ -62,7 +60,7 @@ function download() {
 
 function install_istio() {
   rm -rf ${OUT_DIR} && mkdir ${OUT_DIR}
-	kubectl config use-context "gke_${proj}_${zone}_${CLUSTER_NAME}"
+	kubectl config use-context "gke_${GCP_PROJECT}_${GCP_ZONE}_${CLUSTER_NAME}"
 	download ${OUT_DIR} ${DOWNLOAD_URL}
   pushd $ISTIO_ROOT
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
@@ -79,7 +77,7 @@ function install_istio() {
 
 function update_vmconfig() {
   vm=$1
-  ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $zone --format "value(servicesIpv4Cidr)")
+  ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $GCP_ZONE --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
   echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
 
@@ -161,7 +159,6 @@ function cleanup_istio() {
 
 function setup() {
 	create_clusters ${CLUSTER_NAME} ${zone}
-	create_cluster_admin
   create_gce ${GCE_NAME}
 }
 
