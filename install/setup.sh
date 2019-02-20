@@ -158,7 +158,7 @@ function cleanup_istio() {
 }
 
 function setup() {
-	create_clusters ${CLUSTER_NAME} ${zone}
+	create_clusters ${CLUSTER_NAME} ${GCP_ZONE}
   create_gce ${GCE_NAME}
 }
 
