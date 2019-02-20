@@ -160,6 +160,7 @@ function cleanup_istio() {
 function setup() {
 	create_clusters ${CLUSTER_NAME} ${GCP_ZONE}
   create_gce ${GCE_NAME}
+  install_istio
 }
 
 
@@ -210,6 +211,5 @@ case $1 in
 
   *)
     echo $"Usage: $0 {setup|cleanup|vm2k|k2vm|gce_setup}"
-    exit 1
-
+    # exit 1
 esac
