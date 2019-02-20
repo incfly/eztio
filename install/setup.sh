@@ -211,7 +211,8 @@ case $1 in
     cleanup
     ;;
 
-*)
-      echo $"Usage: $0 {setup|cleanup|vm2k|k2vm|gce_setup}"
-      exit 1
+  *)
+    echo $"Usage: $0 {setup|cleanup|vm2k|k2vm|gce_setup}"
+    exit 1
+
 esac
