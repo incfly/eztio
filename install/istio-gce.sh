@@ -1,3 +1,5 @@
+# TODO, dig @10.52.0.3 -p 53 paymentservice.default.svc.cluster.local, the ip is
+# the node ip from `kubectl describe services kube-dns -n kube-system`
 export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
 export CLUSTER_NAME="${CLUSTER_NAME:-istio-meshexp}"
