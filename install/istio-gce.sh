@@ -38,7 +38,10 @@ function create_gce() {
   name=$1
   echo "Create GCE instance, ${name}..."
   gcloud compute instances create ${name} \
-    --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
+     --image-project=ubuntu-os-cloud  --image=ubuntu-1604-xenial-v20190212
+#    --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
+#   cos does not have dpkg package manager.
+#   1804 does not have docker.
   # On VM... (tag is needed), latest does not work.
   # docker run --rm gcr.io/jianfeih-test/productcatalogservice:2f7240f
 }
@@ -79,7 +82,8 @@ function update_vmconfig() {
   vm=$1
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $GCP_ZONE --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
-  echo "ISTIO_INBOUND_PORTS=3306,8080" >> cluster.env
+  # TODO: This must be refactored
+  echo "ISTIO_INBOUND_PORTS=3306,3550" >> cluster.env
 
   kubectl -n istio-system get secrets istio.default  \
     -o jsonpath='{.data.root-cert\.pem}' |base64 --decode > root-cert.pem
@@ -88,7 +92,7 @@ function update_vmconfig() {
   kubectl -n istio-system get secrets istio.default  \
         -o jsonpath='{.data.cert-chain\.pem}' |base64 --decode > cert-chain.pem
   
-   gcloud compute scp gce-setup.sh cert-chain.pem root-cert.pem cluster.env key.pem ${vm}:~
+   gcloud compute scp istio-gce.sh cert-chain.pem root-cert.pem cluster.env key.pem ${vm}:~
 }
 
 # Deploy bookinfo in two clusters.
@@ -101,8 +105,8 @@ function deploy_bookinfo() {
 	popd
 }
 
-# add_vmservice $service_name $port
-# add_vmservice vmhttp 10.128.15.222 8080 HTTP
+# add_service $service_name $port
+# add_service vmhttp 10.128.15.222 8080 HTTP
 function add_service() {
   svc=$1
   port=$2
@@ -158,20 +162,66 @@ function cleanup_istio() {
 }
 
 function setup() {
-	create_clusters ${CLUSTER_NAME} ${GCP_ZONE}
+  create_clusters ${CLUSTER_NAME} ${GCP_ZONE}
   create_gce ${GCE_NAME}
   install_istio
 }
 
 
 function gce_setup() {
+  # sudo usermod -aG docker $USER
   update_vmconfig ${GCE_NAME}
   vmenv=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
   echo "Passing env var to VM $vmenv"
-  gcloud compute ssh ${GCE_NAME} -- "$vmenv bash ~/gce-setup.sh $@"
+  gcloud compute ssh ${GCE_NAME} -- "$vmenv sudo bash ~/istio-gce.sh gcerun_setup"
 }
 
-# example vm_exec docker run -d  -p 3550:3550  gcr.io/jianfeih-test/productcatalogservice:2f7240f
+
+# gceru_xx functions are supposed to execute on GCE instance.
+#
+function gcerun_setup() {
+  echo "gce setup"
+  # Unable to automate Docker install part...
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sh get-docker.sh
+  docker version
+  curl https://storage.googleapis.com/istio-release/releases/1.1.0-snapshot.6/deb/istio-sidecar.deb  -L > istio-sidecar.deb
+  dpkg -i istio-sidecar.deb
+  echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" >> /etc/hosts
+  mkdir -p /etc/certs /var/lib/istio/envoy
+  cp {root-cert.pem,cert-chain.pem,key.pem} /etc/certs
+  cp cluster.env /var/lib/istio/envoy
+  systemctl start istio
+  systemctl start istio-auth-node-agent
+}
+
+function gcerun_addservice() {
+  if [[ -z "${SERVICE_HOST}" || -z "${SERVICE_IP}" ]]; then
+    echo "Empty SERVICE_HOST or SERVICE_IP, please set."
+    return
+  fi
+  echo "Add service from kubernetes clusters to the VM, Host ${SERVICE_HOST} ${SERVICE_IP}"
+  sudo echo "${SERVICE_IP} ${SERVICE_HOST}" >> /etc/hosts
+}
+
+# TODO: not tested yet.
+function gce_start_helloworld() {
+  kill $(ps aux | grep 'SimpleHTTPServer' | awk '{print $2}')
+  python -m SimpleHTTPServer 8080 > http-server.output 2>&1 &
+}
+
+function echo_env() {
+  echo "env is " $ECHO_ENV
+}
+
+function gcerun_cleanup() {
+  sudo systemctl stop istio
+  sudo systemctl stop istio-auth-node-agent
+  sudo sed -i  '/istio\|cluster.local/d' /etc/hosts
+}
+
+
+# Example: vm_exec docker run -d  -p 3550:3550  gcr.io/jianfeih-test/productcatalogservice:2f7240f
 function vm_exec() {
   gcloud compute ssh ${GCE_NAME} -- "$@"
 }
@@ -182,7 +232,7 @@ case $1 in
     ;;
 
   vm_exec)
-    vm_exec "${@}"
+    vm_exec "${@:2}"
     ;;
 
   gce_setup)
@@ -207,6 +257,10 @@ case $1 in
   
   cleanup)
     cleanup
+    ;;
+
+  gcerun_setup)
+    gcerun_setup
     ;;
 
   *)
