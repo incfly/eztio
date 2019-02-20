@@ -15,15 +15,16 @@ export VM_SERVICE_IP="${SERVICE_IP-10.51.248.227}"
 # Status: VM -> productpage:9080 works and sleep curl VM works as well.
 # We must create clusters sequentially without specifying --async, otherwise will fail.
 function create_clusters() {
-  echo "Create GKE cluster, name ${CLUSTER_NAME}"
+  cluster=$1
+  zone=$2
+  echo "Create GKE cluster, name ${cluster}, zone ${zone}"
   scope="https://www.googleapis.com/auth/compute","https://www.googleapis.com/auth/devstorage.read_only",\
 "https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring",\
 "https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly",\
 "https://www.googleapis.com/auth/trace.append"
-	gcloud container clusters create $CLUSTER_NAME --zone $zone --username "admin" \
+	gcloud container clusters create $cluster --zone $zone --username "admin" \
 --machine-type "n1-standard-2" --image-type "COS" --disk-size "100" \
 --scopes $scope --num-nodes "4" --network "default" --enable-cloud-logging --enable-cloud-monitoring
-  # create_gce ${GCE_NAME}
 }
 
 # Create a GCE instance with container optimized image selection.
@@ -31,7 +32,7 @@ function create_clusters() {
 function create_gce() {
   name=$1
   echo "Create GCE instance, ${name}..."
-  gcloud compute instances create ${GCE_NAME} \
+  gcloud compute instances create ${name} \
     --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
   # On VM... (tag is needed), latest does not work.
   # docker run --rm gcr.io/jianfeih-test/productcatalogservice:2f7240f
@@ -101,13 +102,14 @@ function deploy_bookinfo() {
 	popd
 }
 
-# add_vmservice $service_name $ip $port
+# add_vmservice $service_name $port
 # add_vmservice vmhttp 10.128.15.222 8080 HTTP
 function add_service() {
   svc=$1
-  ip=$2
-  port=$3
-  protocol=$4
+  port=$2
+  ip=$(vm_instance_ip)
+  protocol=$3
+  echo "Add VM service, name = ${svc}, IP ${ip}, protocol ${protocol}"
 	kubectl apply -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: ServiceEntry
@@ -130,10 +132,11 @@ EOF
   $ISTIO_ROOT/bin/istioctl register $svc $ip $port
 }
 
-# remove_service vmhttp 10.128.15.222 8080
+# remove_service vmhttp
 function remove_service() {
   svc=$1
-  ip=$2
+  ip=$(vm_instance_ip)
+  echo "Remove VM service, name = ${svc}, IP ${ip}, protocol ${protocol}"
   kubectl delete ServiceEntry $svc
   $ISTIO_ROOT/bin/istioctl deregister $svc $ip
 }
@@ -155,34 +158,40 @@ function cleanup_istio() {
 	kubectl delete ns istio-system
 }
 
-function do_all() {
-	create_clusters
+function setup() {
+	create_clusters ${CLUSTER_NAME} ${zone}
 	create_cluster_admin
-	# install_istio
-	# Really workaround, remote istio cluster may not be ready.
-	# sleep 60
-	# deploy_bookinfo
-	# get_verify_url
+  create_gce ${GCE_NAME}
 }
 
 
 function gce_setup() {
   vm_config=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
-  printenv
+  # printenv
   echo "Passing config to VM $vm_config"
   gcloud compute ssh ${GCE_NAME} -- "$vm_config bash ~/gce-setup.sh $@"
 }
 
+# example vm_exec docker run -d  -p 3550:3550  gcr.io/jianfeih-test/productcatalogservice:2f7240f
+function vm_exec() {
+  # vm_config=$(printenv | ack 'GATEWAY_IP|VM_SERVICE_HOST|VM_SERVICE_IP|VM_SERVICE_PORT|ECHO_ENV' | tr '\n' ' ')
+  gcloud compute ssh ${GCE_NAME} -- "$@"
+}
+
 case $1 in
   setup)
-    do_all
+    setup
     ;;
 
   update_vmconfig)
-     update_vmconfig
-     ;;
+    update_vmconfig
+    ;;
 
-   gce-setup)
+  vm_exec)
+    vm_exec "${@}"
+    ;;
+
+  gce_setup)
      gce_setup "${@:2}"
      ;;
 
@@ -205,4 +214,8 @@ case $1 in
   cleanup)
     cleanup
     ;;
+
+  *)
+      echo $"Usage: $0 {setup|cleanup|vm2k|k2vm|update_vmconfig}"
+      exit 1
 esac
