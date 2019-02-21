@@ -75,15 +75,15 @@ spec:
           claimName: mysql-pvc
       restartPolicy: Always
 ---
-# apiVersion: networking.istio.io/v1alpha3
-# kind: DestinationRule
-# metadata:
-#   name: mysql-istio-mtls
-# spec:
-#   host: mysql.default.svc.cluster.local
-#   trafficPolicy:
-#     tls:
-#       mode: ISTIO_MUTUAL
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: mysql-istio-mtls
+spec:
+  host: "*.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
 # ---
 # apiVersion: "authentication.istio.io/v1alpha1"
 # kind: "MeshPolicy"
@@ -93,3 +93,6 @@ spec:
 #   peers:
 #   - mtls:
 #       mode: PERMISSIVE
+
+# mysql -hmysql.default.svc.cluster.local -uroot -proot
+# kubectl run   mysql-cli --image=mysql --restart=Never -- sleep 30000

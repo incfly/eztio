@@ -4,7 +4,7 @@ export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
 export GKE_NAME="${GKE_NAME:-istio-meshexp}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-linux.tar.gz"
+export DOWNLOAD_URL=${DOWNLOAD_URL-https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-linux.tar.gz}
 export OUT_DIR="tmp"
 # TODO: fix this hardcoding.
 export ISTIO_ROOT="${OUT_DIR}/istio-1.1.0-snapshot.6"
