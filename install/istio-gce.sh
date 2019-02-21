@@ -2,9 +2,8 @@
 # the node ip from `kubectl describe services kube-dns -n kube-system`
 export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
-export CLUSTER_NAME="${CLUSTER_NAME:-istio-meshexp}"
+export GKE_NAME="${GKE_NAME:-istio-meshexp}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export VM_SCRIPT_URL="https://raw.githubusercontent.com/incfly/istio-gce/master/install/gce-setup.sh"
 export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-linux.tar.gz"
 export OUT_DIR="tmp"
 # TODO: fix this hardcoding.
@@ -28,7 +27,7 @@ function create_clusters() {
 --machine-type "n1-standard-2" --image-type "COS" --disk-size "100" \
 --scopes $scope --num-nodes "4" --network "default" --enable-cloud-logging --enable-cloud-monitoring
 
-  gcloud container clusters get-credentials $CLUSTER_NAME --zone $zone
+  gcloud container clusters get-credentials $GKE_NAME --zone $zone
 	kubectl create clusterrolebinding cluster-admin-binding \
     --clusterrole=cluster-admin \
     --user=$(gcloud config get-value core/account) || true
@@ -38,6 +37,9 @@ function create_clusters() {
 # Make gcr.io/PROJECT-ID public for now...
 function create_gce() {
   name=$1
+  if `gcloud compute instances list | grep $name`; then
+    echo "GCE instance ${name} already exists, skip creating..."
+  fi
   echo "Create GCE instance, ${name}..."
   gcloud compute instances create ${name} \
      --image-project=ubuntu-os-cloud  --image=ubuntu-1604-xenial-v20190212
@@ -55,7 +57,8 @@ function vm_instance_ip() {
 function download() {
   outdir=$1
   download_url=$2
-  local outfile="${OUT_DIR}/istio-download.tgz"
+  rm -rf ${outdir} && mkdir ${outdir}
+  local outfile="${outdir}/istio-download.tgz"
   if [[ ! -f "${outfile}" ]]; then
     wget –quiet -O "${outfile}" "${download_url}"
   fi
@@ -64,8 +67,7 @@ function download() {
 }
 
 function install_istio() {
-  rm -rf ${OUT_DIR} && mkdir ${OUT_DIR}
-	kubectl config use-context "gke_${GCP_PROJECT}_${GCP_ZONE}_${CLUSTER_NAME}"
+	kubectl config use-context "gke_${GCP_PROJECT}_${GCP_ZONE}_${GKE_NAME}"
 	download ${OUT_DIR} ${DOWNLOAD_URL}
   pushd $ISTIO_ROOT
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
@@ -82,7 +84,7 @@ function install_istio() {
 
 function update_vmconfig() {
   vm=$1
-  ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${CLUSTER_NAME} --zone $GCP_ZONE --format "value(servicesIpv4Cidr)")
+  ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${GKE_NAME} --zone $GCP_ZONE --format "value(servicesIpv4Cidr)")
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
   # TODO: This must be refactored
   echo "ISTIO_INBOUND_PORTS=3306,3550" >> cluster.env
@@ -100,7 +102,7 @@ function update_vmconfig() {
 # Deploy bookinfo in two clusters.
 function deploy_bookinfo() {
 	pushd $ISTIO_ROOT
-	kubectl config use-context "gke_${proj}_${zone}_${CLUSTER_NAME}"
+	kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
 	kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 	kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
 	PRODUCT_PAGE_IP=$(kubectl get svc productpage -o jsonpath='{.spec.clusterIP}')
@@ -153,18 +155,18 @@ function k2vm() {
 
 # TODO: bookinfo is not mentioned in the new guide.
 function cleanup_all() {
-	gcloud container clusters delete ${CLUSTER_NAME}
+	gcloud container clusters delete ${GKE_NAME}
   gcloud compute instances delete ${GCE_NAME}
 }
 
 # TODO: just delete Istio.
 function cleanup_istio() {
-	kubectl config use-context "gke_${proj}_${zone}_${CLUSTER_NAME}"
+	kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
 	kubectl delete ns istio-system
 }
 
 function setup() {
-  create_clusters ${CLUSTER_NAME} ${GCP_ZONE}
+  create_clusters ${GKE_NAME} ${GCP_ZONE}
   create_gce ${GCE_NAME}
   install_istio
 }
