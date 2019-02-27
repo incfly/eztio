@@ -4,10 +4,8 @@ export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
 export GKE_NAME="${GKE_NAME:-istio-meshexp}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export DOWNLOAD_URL=${DOWNLOAD_URL-https://github.com/istio/istio/releases/download/1.1.0-snapshot.6/istio-1.1.0-snapshot.6-linux.tar.gz}
+export DOWNLOAD_URL=${DOWNLOAD_URL-https://github.com/istio/istio/releases/download/1.1.0-rc.0/istio-1.1.0-rc.0-linux.tar.gz}
 export OUT_DIR="tmp"
-# TODO: fix this hardcoding.
-export ISTIO_ROOT="${OUT_DIR}/istio-1.1.0-snapshot.6"
 
 export GATEWAY_IP="${GATEWAY_IP:-35.238.212.236}"
 export VM_SERVICE_HOST="${SERVICE_HOST-productpage.default.svc.cluster.local}"
@@ -33,6 +31,10 @@ function create_clusters() {
     --user=$(gcloud config get-value core/account) || true
 }
 
+function istio_root() {
+  find ${OUT_DIR} -maxdepth 1  -mindepth 1 -type d
+}
+
 # Create a GCE instance with container optimized image selection.
 # Make gcr.io/PROJECT-ID public for now...
 function create_gce() {
@@ -51,7 +53,7 @@ function create_gce() {
 }
 
 function vm_instance_ip() {
-  gcloud compute instances describe ${GCE_NAME} | grep networkIP | sed 's/ //g'  | cut -d':' -f2
+  gcloud --format="value(networkInterfaces[0].networkIP)" compute instances describe  ${GCE_NAME}
 }
 
 function download() {
@@ -69,7 +71,7 @@ function download() {
 function install_istio() {
 	kubectl config use-context "gke_${GCP_PROJECT}_${GCP_ZONE}_${GKE_NAME}"
 	download ${OUT_DIR} ${DOWNLOAD_URL}
-  pushd $ISTIO_ROOT
+  pushd $(istio_root)
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
 	helm repo add istio.io "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
 	helm dep update install/kubernetes/helm/istio
@@ -101,7 +103,7 @@ function update_vmconfig() {
 
 # Deploy bookinfo in two clusters.
 function deploy_bookinfo() {
-	pushd $ISTIO_ROOT
+	pushd $(istio_root)
 	kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
 	kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 	kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
@@ -136,7 +138,7 @@ spec:
         http: ${port}
 EOF
   # bin/istioctl  register vmhttp 10.128.15.222 8080
-  $ISTIO_ROOT/bin/istioctl register $svc $ip $port
+  $(istio_root)/bin/istioctl register $svc $ip $port
 }
 
 # remove_service vmhttp
@@ -145,7 +147,7 @@ function remove_service() {
   ip=$(vm_instance_ip)
   echo "Remove VM service, name = ${svc}, IP ${ip}, protocol ${protocol}"
   kubectl delete ServiceEntry $svc
-  $ISTIO_ROOT/bin/istioctl deregister $svc $ip
+  $(istio_root)/bin/istioctl deregister $svc $ip
 }
 
 # k2vm vmhttp:8080
