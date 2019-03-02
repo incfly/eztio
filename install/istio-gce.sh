@@ -7,8 +7,10 @@ export GCE_NAME="${GCE_NAME:-istio-vm}"
 export ISTIO_RELEASE="istio-1.1.0-rc.0"
 export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/${ISTIO_RELEASE}-linux.tar.gz"
 export OUT_DIR="tmp"
-export VM_SERVICE_HOST="${SERVICE_HOST-productpage.default.svc.cluster.local}"
-export VM_SERVICE_IP="${SERVICE_IP-10.51.248.227}"
+
+# TODO: work this out, not idea...
+# export VM_SERVICE_HOST="${SERVICE_HOST-productpage.default.svc.cluster.local}"
+# export VM_SERVICE_IP="${SERVICE_IP-10.51.248.227}"
 
 # Status: VM -> productpage:9080 works and sleep curl VM works as well.
 # We must create clusters sequentially without specifying --async, otherwise will fail.
@@ -85,8 +87,6 @@ function dumpconfig() {
   cat <<EOT >> mesh-expansion.env
 GATEWAY_IP=$(istio_gateway_ip)
 ISTIO_RELEASE=${ISTIO_RELEASE}
-VM_SERVICE_HOST=${VM_SERVICE_HOST}
-VM_SERVICE_IP=${VM_SERVICE_IP}
 EOT
 }
 
