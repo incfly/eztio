@@ -1,5 +1,6 @@
 # TODO, dig @10.52.0.3 -p 53 paymentservice.default.svc.cluster.local, the ip is
 # the node ip from `kubectl describe services kube-dns -n kube-system`
+
 export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
 export GKE_NAME="${GKE_NAME:-microservice-demo}"
@@ -7,12 +8,6 @@ export GCE_NAME="${GCE_NAME:-istio-vm}"
 export ISTIO_RELEASE=${ISTIO_RELEASE:-"istio-1.1.0-rc.0"}
 export OUT_DIR="tmp"
 
-# TODO: work this out, not idea...
-# export VM_SERVICE_HOST="${SERVICE_HOST-productpage.default.svc.cluster.local}"
-# export VM_SERVICE_IP="${SERVICE_IP-10.51.248.227}"
-
-# Status: VM -> productpage:9080 works and sleep curl VM works as well.
-# We must create clusters sequentially without specifying --async, otherwise will fail.
 function create_clusters() {
   cluster=$1
   zone=$2
@@ -26,6 +21,7 @@ function create_clusters() {
 "https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring",\
 "https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly",\
 "https://www.googleapis.com/auth/trace.append"
+    # We must create clusters sequentially without specifying --async, otherwise will fail.
     gcloud container clusters create $cluster --zone $zone --username "admin" \
     --machine-type "n1-standard-2" --image-type "COS" --disk-size "100" \
     --scopes $scope --num-nodes "4" --network "default" --enable-cloud-logging --enable-cloud-monitoring
@@ -205,36 +201,28 @@ function gce_setup() {
 
 
 # gceru_xx functions are supposed to execute on GCE instance.
+# TODO: comment out the gcerun_setup since we use pre-created image, test it if works or not.
 function gcerun_setup() {
   echo "GCE Setup running on GCE instance..."
   export $(cat mesh-expansion.env | xargs)
-  if [[ `which docker` ]]; then
-    echo "Docker exists, skip installing..."
-  else
-    # Unable to automate Docker install part, have to manually login to the GCE instance.
-    rm -rf get-docker.sh && curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    docker version
-  fi
+  # if [[ `which docker` ]]; then
+  #   echo "Docker exists, skip installing..."
+  # else
+  #   # Unable to automate Docker install part, have to manually login to the GCE instance.
+  #   rm -rf get-docker.sh && curl -fsSL https://get.docker.com -o get-docker.sh
+  #   sh get-docker.sh
+  #   docker version
+  # fi
   # TODO: substr is hacky...
   echo "Installing $ISTIO_RELEASE, IP $GATEWAY_IP"
-  curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE:6}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
-  dpkg -i istio-sidecar.deb
+  # curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE:6}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
+  # dpkg -i istio-sidecar.deb
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" | sudo tee -a /etc/hosts
   mkdir -p /etc/certs /var/lib/istio/envoy
   cp {root-cert.pem,cert-chain.pem,key.pem} /etc/certs
   cp cluster.env /var/lib/istio/envoy
   systemctl start istio
   systemctl start istio-auth-node-agent
-}
-
-function gcerun_addservice() {
-  if [[ -z "${SERVICE_HOST}" || -z "${SERVICE_IP}" ]]; then
-    echo "Empty SERVICE_HOST or SERVICE_IP, please set."
-    return
-  fi
-  echo "Add service from kubernetes clusters to the VM, Host ${SERVICE_HOST} ${SERVICE_IP}"
-  echo "${SERVICE_IP} ${SERVICE_HOST}" | sudo tee -a /etc/hosts
 }
 
 # TODO: not tested yet.
