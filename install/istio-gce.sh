@@ -2,10 +2,9 @@
 # the node ip from `kubectl describe services kube-dns -n kube-system`
 export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
-export GKE_NAME="${GKE_NAME:-istio-meshexp}"
+export GKE_NAME="${GKE_NAME:-microservice-demo}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export ISTIO_RELEASE="istio-1.1.0-rc.0"
-export DOWNLOAD_URL="https://github.com/istio/istio/releases/download/${ISTIO_RELEASE}-linux.tar.gz"
+export ISTIO_RELEASE=${ISTIO_RELEASE:-"istio-1.1.0-rc.0"}
 export OUT_DIR="tmp"
 
 # TODO: work this out, not idea...
@@ -56,8 +55,11 @@ function create_gce() {
     return
   fi
   echo "Create GCE instance, ${name}..."
+  # This image has pre-installed package, Istio sidecar and Docker.
+  # TODO: figure out how to share the image publicily.
   gcloud compute instances create ${name} \
-     --image-project=ubuntu-os-cloud  --image=ubuntu-1604-xenial-v20190212
+    --image-project=jianfeih-test --image=istio-1-1-rc1-gce
+    #  --image-project=ubuntu-os-cloud  --image=ubuntu-1604-xenial-v20190212
 #    --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
 #   cos does not have dpkg package manager.
 #   1804 does not have docker.
@@ -71,7 +73,7 @@ function vm_instance_ip() {
 
 function download() {
   outdir=$1
-  download_url=$2
+  download_url="https://github.com/istio/istio/releases/download/${ISTIO_RELEASE}-linux.tar.gz"
   mkdir -p ${outdir}
   # TODO: not use the same name.
   local outfile="${outdir}/istio-download.tgz"
@@ -92,14 +94,14 @@ EOT
 
 function install_istio() {
 	kubectl config use-context "gke_${GCP_PROJECT}_${GCP_ZONE}_${GKE_NAME}"
-	download ${OUT_DIR} ${DOWNLOAD_URL}
+	download ${OUT_DIR}
   pushd $(istio_root)
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
   # TODO refactor this out.
 	helm repo add istio.io "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
 	helm dep update install/kubernetes/helm/istio
 	helm template install/kubernetes/helm/istio --name istio --namespace istio-system \
---set global.meshExpansion.enabled=true > ./istio.yaml
+    --set global.meshExpansion.enabled=true > ./istio.yaml
 	kubectl create ns istio-system
 	kubectl apply -f ./istio.yaml
 	kubectl label namespace default istio-injection=enabled
@@ -160,15 +162,18 @@ function k2vm() {
 }
 
 # TODO: bookinfo is not mentioned in the new guide.
-function cleanup_all() {
+function cleanup() {
 	gcloud container clusters delete ${GKE_NAME}
   gcloud compute instances delete ${GCE_NAME}
 }
 
 # TODO: just delete Istio.
-function cleanup_istio() {
-	kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
+function uninstall_istio() {
+  kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
+  pushd $(istio_root)
 	kubectl delete ns istio-system
+  for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl delete -f $i; done
+  popd
 }
 
 function setup() {
@@ -176,7 +181,6 @@ function setup() {
   create_gce ${GCE_NAME}
   install_istio
 }
-
 
 function gce_setup() {
   # sudo usermod -aG docker $USER
@@ -240,9 +244,9 @@ function gce_start_helloworld() {
 }
 
 function gcerun_cleanup() {
-  sudo systemctl stop istio
-  sudo systemctl stop istio-auth-node-agent
-  sudo sed -i  '/istio\|cluster.local/d' /etc/hosts
+  systemctl stop istio
+  systemctl stop istio-auth-node-agent
+  sed -i  '/istio\|cluster.local/d' /etc/hosts
 }
 
 # Example: vm_exec docker run -d  -p 3550:3550  gcr.io/jianfeih-test/productcatalogservice:2f7240f
