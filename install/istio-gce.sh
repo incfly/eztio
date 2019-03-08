@@ -138,7 +138,7 @@ spec:
    endpoints:
     - address: $ip
       ports:
-        http: ${port}
+        ${protocol}-${svc}: ${port}
 EOF
   $(istio_root)/bin/istioctl register $svc $ip $port
 }
