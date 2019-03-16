@@ -5,7 +5,7 @@ export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
 export GKE_NAME="${GKE_NAME:-microservice-demo}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export ISTIO_RELEASE=${ISTIO_RELEASE:-"istio-1.1.0-rc.0"}
+export ISTIO_RELEASE=${ISTIO_RELEASE:-"1.1.0-rc.3"}
 export OUT_DIR="tmp"
 
 function create_clusters() {
@@ -69,23 +69,16 @@ function vm_instance_ip() {
 
 function download() {
   outdir=$1
-  download_url="https://github.com/istio/istio/releases/download/${ISTIO_RELEASE}-linux.tar.gz"
+  # https://github.com/istio/istio/releases/download/1.1.0-rc.3/istio-1.1.0-rc.3-linux.tar.gz
+  download_url="https://github.com/istio/istio/releases/download/${ISTIO_RELEASE}/istio-${ISTIO_RELEASE}-linux.tar.gz"
   mkdir -p ${outdir}
   # TODO: not use the same name.
-  local outfile="${outdir}/istio-download.tgz"
+  local outfile="${outdir}/istio-${ISTIO_RELEASE}.tgz"
   if [[ ! -f "${outfile}" ]]; then
     wget –quiet -O "${outfile}" "${download_url}"
   fi
   tar xf $outfile -C ${OUT_DIR}
   echo $outfile
-}
-
-function dumpconfig() {
-  rm -rf mesh-expansion.env
-  cat <<EOT >> mesh-expansion.env
-GATEWAY_IP=$(istio_gateway_ip)
-ISTIO_RELEASE=${ISTIO_RELEASE}
-EOT
 }
 
 function install_istio() {
@@ -97,7 +90,9 @@ function install_istio() {
 	helm repo add istio.io "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
 	helm dep update install/kubernetes/helm/istio
 	helm template install/kubernetes/helm/istio --name istio --namespace istio-system \
-    --set global.meshExpansion.enabled=true > ./istio.yaml
+    -f install/kubernetes/helm/istio/values-istio-demo.yaml \
+    --set global.meshExpansion.enabled=true \
+    --set global.proxy.accessLogFile="/dev/stdout" > ./istio.yaml
 	kubectl create ns istio-system
 	kubectl apply -f ./istio.yaml
 	kubectl label namespace default istio-injection=enabled
@@ -140,7 +135,8 @@ spec:
       ports:
         ${protocol}-${svc}: ${port}
 EOF
-  $(istio_root)/bin/istioctl register $svc $ip $port
+  $(istio_root)/bin/istioctl register $svc $ip ${protocol}:${port}
+  kubectl delete endpoints $svc
 }
 
 # remove_service vmhttp
@@ -163,10 +159,11 @@ function cleanup() {
   gcloud compute instances delete ${GCE_NAME}
 }
 
-# TODO: just delete Istio.
 function uninstall_istio() {
   kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
   pushd $(istio_root)
+  # TODO, test it.
+  kubectl delete se,dr,policy --all
 	kubectl delete ns istio-system
   for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl delete -f $i; done
   popd
@@ -180,19 +177,25 @@ function setup() {
 
 function gce_setup() {
   # sudo usermod -aG docker $USER
+  if [[ $# -ne 1 ]]; then
+    echo "Please provide argument for port list, for example 8000,3550"
+    return
+  fi
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${GKE_NAME} --zone $GCP_ZONE --format "value(servicesIpv4Cidr)")
-  echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\n" > cluster.env
-  # TODO: This must be refactored
-  echo "ISTIO_INBOUND_PORTS=3306,3550" >> cluster.env
+  rm -rf mesh-expansion.env cluster.env
+  echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\nISTIO_INBOUND_PORTS=$1" > cluster.env
+  cat <<EOT >> mesh-expansion.env
+GATEWAY_IP=$(istio_gateway_ip)
+ISTIO_RELEASE=${ISTIO_RELEASE}
+EOT
 
-  kubectl -n istio-system get secrets istio.default  \
+  kubectl get secrets istio.default  \
     -o jsonpath='{.data.root-cert\.pem}' |base64 --decode > root-cert.pem
-  kubectl -n istio-system get secrets istio.default  \
+  kubectl get secrets istio.default  \
       -o jsonpath='{.data.key\.pem}' |base64 --decode > key.pem
-  kubectl -n istio-system get secrets istio.default  \
+  kubectl get secrets istio.default  \
         -o jsonpath='{.data.cert-chain\.pem}' |base64 --decode > cert-chain.pem
   
-  dumpconfig
   gcloud compute scp mesh-expansion.env istio-gce.sh cert-chain.pem root-cert.pem cluster.env key.pem ${GCE_NAME}:~
 
   # Last step, execute setup on GCE VM.
