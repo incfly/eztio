@@ -5,7 +5,7 @@ export GCP_PROJECT="${GCP_PROJECT:-jianfeih-test}"
 export GCP_ZONE="${zone:-us-central1-a}"
 export GKE_NAME="${GKE_NAME:-microservice-demo}"
 export GCE_NAME="${GCE_NAME:-istio-vm}"
-export ISTIO_RELEASE=${ISTIO_RELEASE:-"1.1.0-rc.3"}
+export ISTIO_RELEASE=${ISTIO_RELEASE:-"1.1.0"}
 export OUT_DIR="tmp"
 
 function create_clusters() {
@@ -16,7 +16,8 @@ function create_clusters() {
     echo "GKE instance ${name} already exists, skip creating..."
     return
   else 
-    echo "Create GKE cluster, name ${cluster}, zone ${zone}"
+    echo "Create GKE cluster, project ${GCP_PROJECT}, name ${cluster}, zone ${zone}"
+    sleep 3
     scope="https://www.googleapis.com/auth/compute","https://www.googleapis.com/auth/devstorage.read_only",\
 "https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring",\
 "https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly",\
@@ -52,15 +53,11 @@ function create_gce() {
   fi
   echo "Create GCE instance, ${name}..."
   # This image has pre-installed package, Istio sidecar and Docker.
-  # TODO: figure out how to share the image publicily.
   gcloud compute instances create ${name} \
     --image-project=jianfeih-test --image=istio-1-1-rc1-gce
     #  --image-project=ubuntu-os-cloud  --image=ubuntu-1604-xenial-v20190212
-#    --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
-#   cos does not have dpkg package manager.
-#   1804 does not have docker.
-  # On VM... (tag is needed), latest does not work.
-  # docker run --rm gcr.io/jianfeih-test/productcatalogservice:2f7240f
+    #  --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
+    #  cos does not have dpkg package manager, 1804 does not have docker.
 }
 
 function vm_instance_ip() {
@@ -87,8 +84,16 @@ function install_istio() {
   pushd $(istio_root)
 	for i in install/kubernetes/helm/istio-init/files/crd*yaml; do kubectl apply -f $i; done
   # TODO refactor this out.
-	helm repo add istio.io "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
+	helm repo add istio.io \
+    "https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/release-1.1-latest-daily/charts/"
 	helm dep update install/kubernetes/helm/istio
+  # Bugs on istio/values-istio-demo.yaml since global var is defined twice.
+  cat <<EOF
+==================================
+Installing Istio (mesh expansion enabled)
+==================================
+EOF
+  sleep 3
 	helm template install/kubernetes/helm/istio --name istio --namespace istio-system \
     -f install/kubernetes/helm/istio/values-istio-demo.yaml \
     --set global.meshExpansion.enabled=true \
@@ -96,16 +101,6 @@ function install_istio() {
 	kubectl create ns istio-system
 	kubectl apply -f ./istio.yaml
 	kubectl label namespace default istio-injection=enabled
-	popd
-}
-
-# Deploy bookinfo in two clusters.
-function deploy_bookinfo() {
-	pushd $(istio_root)
-	kubectl config use-context "gke_${proj}_${zone}_${GKE_NAME}"
-	kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
-	kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
-	PRODUCT_PAGE_IP=$(kubectl get svc productpage -o jsonpath='{.spec.clusterIP}')
 	popd
 }
 
@@ -183,12 +178,24 @@ function gce_setup() {
   fi
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${GKE_NAME} --zone $GCP_ZONE --format "value(servicesIpv4Cidr)")
   rm -rf mesh-expansion.env cluster.env
+  cat <<EOF
+============================
+Generate cluster.env config for VM instance.
+============================
+EOF
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\nISTIO_INBOUND_PORTS=$1" > cluster.env
   cat <<EOT >> mesh-expansion.env
 GATEWAY_IP=$(istio_gateway_ip)
 ISTIO_RELEASE=${ISTIO_RELEASE}
 EOT
 
+  cat <<EOF
+===============================
+Fetch key cert from the VM workload.
+Namespace default, service account default.
+===============================
+EOF
+  sleep 3
   kubectl get secrets istio.default  \
     -o jsonpath='{.data.root-cert\.pem}' |base64 --decode > root-cert.pem
   kubectl get secrets istio.default  \
@@ -206,7 +213,11 @@ EOT
 # gceru_xx functions are supposed to execute on GCE instance.
 # TODO: comment out the gcerun_setup since we use pre-created image, test it if works or not.
 function gcerun_setup() {
-  echo "GCE Setup running on GCE instance..."
+  cat <<EOF
+=========================
+Set up GCE instance for mesh expansion.
+=========================
+EOF
   export $(cat mesh-expansion.env | xargs)
   # if [[ `which docker` ]]; then
   #   echo "Docker exists, skip installing..."
@@ -217,13 +228,31 @@ function gcerun_setup() {
   #   docker version
   # fi
   # TODO: substr is hacky...
-  echo "Installing $ISTIO_RELEASE, IP $GATEWAY_IP"
+  cat <<EOF
+=========================
+Installing $ISTIO_RELEASE, Gateway IP $GATEWAY_IP
+Add Istio pilot, citadel DNS entry to /etc/hosts
+=========================
+EOF
+  sleep 3
   # curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE:6}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
   # dpkg -i istio-sidecar.deb
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" | sudo tee -a /etc/hosts
   mkdir -p /etc/certs /var/lib/istio/envoy
+  cat <<EOF
+=========================
+Install key,cert to /etc/certs
+=========================
+EOF
   cp {root-cert.pem,cert-chain.pem,key.pem} /etc/certs
   cp cluster.env /var/lib/istio/envoy
+  sleep 3
+  cat <<EOF
+=========================
+Starting Istio...
+=========================
+EOF
+  sleep 3
   systemctl start istio
   systemctl start istio-auth-node-agent
 }
@@ -240,7 +269,7 @@ function gcerun_cleanup() {
   sed -i  '/istio\|cluster.local/d' /etc/hosts
 }
 
-# Example: vm_exec docker run -d  -p 3550:3550  gcr.io/jianfeih-test/productcatalogservice:2f7240f
+# Example: vm_exec python -m SimpleHTTPServer 3550
 function vm_exec() {
   gcloud compute ssh ${GCE_NAME} -- "$@"
 }
@@ -279,7 +308,6 @@ case $1 in
     ;;
 
   gcerun_setup)
-    echo $GATEWAY_IP
     gcerun_setup
     ;;
 
