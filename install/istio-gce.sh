@@ -53,11 +53,8 @@ function create_gce() {
   fi
   echo "Create GCE instance, ${name}..."
   # This image has pre-installed package, Istio sidecar and Docker.
-  gcloud compute instances create ${name} \
-    --image-project=jianfeih-test --image=istio-1-1-rc1-gce
-    #  --image-project=ubuntu-os-cloud  --image=ubuntu-1604-xenial-v20190212
-    #  --image-project=coreos-cloud  --image=coreos-alpha-2051-0-0-v20190211
-    #  cos does not have dpkg package manager, 1804 does not have docker.
+  gcloud compute instances create ${name}
+    # --image-project=jianfeih-test --image=istio-1-1-rc1-gce
 }
 
 function vm_instance_ip() {
@@ -235,7 +232,7 @@ Add Istio pilot, citadel DNS entry to /etc/hosts
 =========================
 EOF
   sleep 3
-  # curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE:6}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
+  curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
   # dpkg -i istio-sidecar.deb
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" | sudo tee -a /etc/hosts
   mkdir -p /etc/certs /var/lib/istio/envoy
@@ -297,10 +294,6 @@ case $1 in
 
   k2vm)
     k2vm "${@:2}"
-    ;;
-
-  vm2k)
-    vm2k "${@:2}"
     ;;
   
   cleanup)
