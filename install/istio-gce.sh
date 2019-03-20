@@ -233,7 +233,7 @@ Add Istio pilot, citadel DNS entry to /etc/hosts
 EOF
   sleep 3
   curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
-  # dpkg -i istio-sidecar.deb
+  dpkg -i istio-sidecar.deb
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" | sudo tee -a /etc/hosts
   mkdir -p /etc/certs /var/lib/istio/envoy
   cat <<EOF
