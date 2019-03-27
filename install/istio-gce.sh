@@ -91,10 +91,13 @@ Installing Istio (mesh expansion enabled)
 ==================================
 EOF
   sleep 3
+  # Need to run in a git repo because the PR is not merged yet...
 	helm template install/kubernetes/helm/istio --name istio --namespace istio-system \
     -f install/kubernetes/helm/istio/values-istio-demo.yaml \
     --set global.meshExpansion.enabled=true \
-    --set global.proxy.accessLogFile="/dev/stdout" > ./istio.yaml
+    --set global.proxy.accessLogFile="/dev/stdout" \
+    --set global.hub="gcr.io/jianfeih-test" \
+    --set global.tag="douglas-vm-mixer" > ./istio.yaml
 	kubectl create ns istio-system
 	kubectl apply -f ./istio.yaml
 	kubectl label namespace default istio-injection=enabled
@@ -113,7 +116,7 @@ function add_service() {
 apiVersion: networking.istio.io/v1alpha3
 kind: ServiceEntry
 metadata:
-  name: ${svc}
+  name: ${svc}-rawvm
 spec:
    hosts:
    - ${svc}.default.svc.cluster.local
@@ -124,6 +127,8 @@ spec:
    resolution: STATIC
    endpoints:
     - address: $ip
+      labels:
+        registry: rawvm
       ports:
         ${protocol}-${svc}: ${port}
 EOF
@@ -136,7 +141,7 @@ function remove_service() {
   svc=$1
   ip=$(vm_instance_ip)
   echo "Remove VM service, name = ${svc}, IP ${ip}, protocol ${protocol}"
-  kubectl delete ServiceEntry $svc
+  kubectl delete ServiceEntry "${svc}-rawvm"
   $(istio_root)/bin/istioctl deregister $svc $ip
 }
 

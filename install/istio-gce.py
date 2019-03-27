@@ -1,10 +1,6 @@
 #!/usr/bin/python
 import argparse
 
-
-def bash_cmd(args):
-
-
 def setup_handlers(args):
   if args.operation == 'cluster':
     print 'setup cluster'
