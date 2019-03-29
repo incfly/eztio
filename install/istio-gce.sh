@@ -90,7 +90,7 @@ function install_istio() {
 Installing Istio (mesh expansion enabled)
 ==================================
 EOF
-  sleep 3
+  read tmpvar
   # Need to run in a git repo because the PR is not merged yet...
 	helm template install/kubernetes/helm/istio --name istio --namespace istio-system \
     -f install/kubernetes/helm/istio/values-istio-demo.yaml \
@@ -182,32 +182,46 @@ function gce_setup() {
   rm -rf mesh-expansion.env cluster.env
   cat <<EOF
 ============================
-Generate cluster.env config for VM instance.
+Generate cluster.env config for VM instance? Y/N
 ============================
 EOF
+  read tmpvar
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\nISTIO_INBOUND_PORTS=$1" > cluster.env
   cat <<EOT >> mesh-expansion.env
 GATEWAY_IP=$(istio_gateway_ip)
 ISTIO_RELEASE=${ISTIO_RELEASE}
 EOT
-
   cat <<EOF
 ===============================
 Fetch key cert from the VM workload.
 Namespace default, service account default.
+Y/N
 ===============================
 EOF
-  sleep 3
+  read tmpvar
   kubectl get secrets istio.default  \
     -o jsonpath='{.data.root-cert\.pem}' |base64 --decode > root-cert.pem
   kubectl get secrets istio.default  \
       -o jsonpath='{.data.key\.pem}' |base64 --decode > key.pem
   kubectl get secrets istio.default  \
         -o jsonpath='{.data.cert-chain\.pem}' |base64 --decode > cert-chain.pem
-  
-  gcloud compute scp mesh-expansion.env istio-gce.sh cert-chain.pem root-cert.pem cluster.env key.pem ${GCE_NAME}:~
 
+cat <<EOF
+===============================
+Copy config, key, cert to ${GCE_VM}
+Y/N
+===============================
+EOF
+  read tmpvar  
+  gcloud compute scp mesh-expansion.env istio-gce.sh cert-chain.pem root-cert.pem cluster.env key.pem ${GCE_NAME}:~
   # Last step, execute setup on GCE VM.
+  cat <<EOF
+===============================
+Run setup script on GCE VM
+Y/N
+===============================
+EOF
+  read tmpvar
   gcloud compute ssh ${GCE_NAME} -- "sudo bash -x ~/istio-gce.sh gcerun_setup"
 }
 
@@ -236,7 +250,7 @@ Installing $ISTIO_RELEASE, Gateway IP $GATEWAY_IP
 Add Istio pilot, citadel DNS entry to /etc/hosts
 =========================
 EOF
-  sleep 3
+  read tmpvar
   curl "https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE}/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
   dpkg -i istio-sidecar.deb
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" | sudo tee -a /etc/hosts
@@ -246,6 +260,7 @@ EOF
 Install key,cert to /etc/certs
 =========================
 EOF
+  read tmpvar
   cp {root-cert.pem,cert-chain.pem,key.pem} /etc/certs
   cp cluster.env /var/lib/istio/envoy
   sleep 3
@@ -254,7 +269,7 @@ EOF
 Starting Istio...
 =========================
 EOF
-  sleep 3
+  read tmpvar
   systemctl start istio
   systemctl start istio-auth-node-agent
 }
