@@ -1,5 +1,7 @@
 # Performance Testing for Istio Mesh Expansion
 
+Just don't do this, using k8s service at all!
+
 `gce.tf` for the instance setup.
 
 - Setup the gke cluster, with mesh expansion enabled, not integrating with Terraform first.
