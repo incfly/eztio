@@ -1,6 +1,19 @@
 #!/usr/bin/python
-import argparse
+# This program provides common operations for Istio mesh expansion for incfly@ personal purpose.
+# Hopefully some features can get into offical tooling, istioctl eventually.
+# Sample usage
 
+# istio-gce init <default-project> <default-zone> <cluster-name>
+# install config in .istiovm/ folder
+# istio-gce instance setup <gce-name>
+# istio-gce service add <service> <port> // invoking istioctl eventually.
+# istio-gce service delete <service>
+# istio-gce status // reporting the mesh expansion status in terms of enrolled vm.
+# 
+# istio-gce misc gce-image create --debian-url="https://a.b.c"
+# for incfly@ personal sake.
+
+import argparse
 def setup_handlers(args):
   if args.operation == 'cluster':
     print 'setup cluster'
@@ -8,7 +21,6 @@ def setup_handlers(args):
     print 'setup vm'
   else:
     print 'invalid command', args.operation
-
 
 def service_handlers(args):
   print 'manage service ', args
