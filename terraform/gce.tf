@@ -1,18 +1,11 @@
 # mesh expansion as code.
-# - Setup the gke cluster, with mesh expansion enabled, not integrating with Terraform first.
-# - Provision the GCE instance, using Terraform.
-# - GCE instance setup. Can be part of the istio-vm.py subcommands.
-#   - Unkonwn, the service account mapping.
-#   - Seems better to use py imperative for now, and do post setup independent of terraform.
-# - Mesh registration, istio-vm.py temporarily, istioctl finally.
-# - Run the config and simulate traffic.
-# - Gather the metrics of the promethus.
+
 variable "meshconfig" {
-    type = "map"
-    default = {
-      "project" = "istio-gce-perf"
-      "gce_image" = "debian-cloud/debian-9"
-    }
+  type = "map"
+  default = {
+    "project" = "istio-gce-perf"
+    "gce_image" = "debian-cloud/debian-9"
+  }
 }
 
 resource "google_compute_instance" "default" {

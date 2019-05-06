@@ -14,6 +14,7 @@
 # for incfly@ personal sake.
 
 import argparse
+
 def setup_handlers(args):
   if args.operation == 'cluster':
     print 'setup cluster'
