@@ -1,6 +1,3 @@
-# istio-gce
+# istio-tools
 
-Various tools and samples to enhance Istio mesh expansion workflow.
-
-- `samples`, contain a list of apps deployed using Istio mesh expansion.
-- `install`, bash automation script for Istio mesh expansion setup.
+This is a personal repo for various Istio related operation. It's not garanteed to stay up to date with Istio current release.
