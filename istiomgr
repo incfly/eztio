@@ -34,6 +34,9 @@ def filename(version):
 
 def install_handler(args):
   version = args.version
+  file_name = filename(version)
+  if os.path.isfile(file_path):
+    print('Istio version %s exists, skip downloading...' % version)
   print('Downloading Istio version %s' % version)
   # Download Istio first.
   os.mkdir('downloads')
