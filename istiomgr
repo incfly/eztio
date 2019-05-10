@@ -15,7 +15,7 @@
 
 import argparse
 import urllib.request
-
+import os
 
 def meshexp_handler(args):
   print('meshexp', args)
@@ -29,13 +29,14 @@ def download_url(version):
 
 
 def filename(version):
-  return 'istio-%s-linux.tar.gz' % version
+  return 'downloads/istio-%s-linux.tar.gz' % version
 
 
 def install_handler(args):
   version = args.version
   print('Downloading Istio version %s' % version)
   # Download Istio first.
+  os.mkdir('downloads')
   local_filename, headers = urllib.request.urlretrieve(
     download_url(version), filename(version))
   # Install Istio.
