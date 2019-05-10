@@ -1,45 +1,57 @@
-#!/usr/bin/python
+#!/usr/local/bin/python3
 # This program provides common operations for Istio mesh expansion for incfly@ personal purpose.
 # Hopefully some features can get into offical tooling, istioctl eventually.
 # Sample usage
 
-# istio-gce init <default-project> <default-zone> <cluster-name>
-# install config in .istiovm/ folder
-# istio-gce instance setup <gce-name>
-# istio-gce service add <service> <port> // invoking istioctl eventually.
-# istio-gce service delete <service>
-# istio-gce status // reporting the mesh expansion status in terms of enrolled vm.
-# 
-# istio-gce misc gce-image create --debian-url="https://a.b.c"
-# for incfly@ personal sake.
+# istiomgr init <default-project> <default-zone> <cluster-name>
+#   install config in .istiovm/ folder
+# istiomgr install <version> <helm-flag>?
+#   install istio with some options.
+# istiomgr meshexp setup <vm-instance-name>
+#   setup meshexp instance.
+# istiomgr meshexp add <service> <port> // invoking istioctl eventually.
+# istiomgr meshexp remove <service> // invoking istioctl eventually.
+# istiomgr status // reporting istio status from .istio/ directory
 
 import argparse
-
-def setup_handlers(args):
-  if args.operation == 'cluster':
-    print 'setup cluster'
-  elif args.operation == 'vm':
-    print 'setup vm'
-  else:
-    print 'invalid command', args.operation
-
-def service_handlers(args):
-  print 'manage service ', args
+import urllib.request
 
 
-parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('-vm', dest='vm_name')
+def meshexp_handler(args):
+  print('meshexp', args)
 
-subparsers = parser.add_subparsers(help='subparser help')
 
-setup = subparsers.add_parser('setup')
-setup.add_argument('operation')
-setup.set_defaults(handler=setup_handlers)
+def install_handler(args):
+  version = args.version
+  print('jianfeih install istio version %s' % version)
+  # Download istio first
+  local_filename, headers = urllib.request.urlretrieve(
+    'https://github.com/istio/istio/releases/download/1.1.2/istio-1.1.2-linux.tar.gz',
+    './istio-1.1.2-linux.tar.gz')
+# class InstallAction(argparse.Action):
+#   def __call__(self, parser, namespace, values, option_string=None):
+#     print('jianfeih debug ', parser, namespace, values)
+  
 
-service = subparsers.add_parser('service')
-service.add_argument('operation')
-service.set_defaults(handler=service_handlers)
+def setup_parser():
+  parser = argparse.ArgumentParser(
+    description='istiomgr is a program for daily istio management.')
+  sub_parser = parser.add_subparsers()
+  install_parser = sub_parser.add_parser(
+    'install',
+    help='Install Istio with some option.')
+  install_parser.add_argument('version', type=str,
+    help='istio version to install, e.g. 1.1.2')
+  install_parser.set_defaults(func=install_handler)
+  # meshexp_parser = sub_parser.add_parser('meshexp')
+  # meshexp_parser.add_argument(
+  #   'operation', type=str,
+  #   help='actions for the mesh expansion, add/remove/setup')
+  # meshexp_parser.set_defaults(func=meshexp_handler)
+  args = parser.parse_args()
+  print(args)
+  # parser.func(args)
+  args.func(args)
 
-result = parser.parse_args()
-print result
-result.handler(result)
+
+setup_parser()
