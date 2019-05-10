@@ -21,13 +21,25 @@ def meshexp_handler(args):
   print('meshexp', args)
 
 
+def download_url(version):
+  return (
+    'https://github.com/istio/istio/releases/download/'
+    '{0}/istio-{0}-linux.tar.gz'
+  ).format(version)
+
+
+def filename(version):
+  return 'istio-%s-linux.tar.gz' % version
+
+
 def install_handler(args):
   version = args.version
-  print('jianfeih install istio version %s' % version)
-  # Download istio first
+  print('Downloading Istio version %s' % version)
+  # Download Istio first.
   local_filename, headers = urllib.request.urlretrieve(
-    'https://github.com/istio/istio/releases/download/1.1.2/istio-1.1.2-linux.tar.gz',
-    './istio-1.1.2-linux.tar.gz')
+    download_url(version), filename(version))
+  # Install Istio.
+
 # class InstallAction(argparse.Action):
 #   def __call__(self, parser, namespace, values, option_string=None):
 #     print('jianfeih debug ', parser, namespace, values)
