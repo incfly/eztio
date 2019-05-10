@@ -2,23 +2,31 @@
 # This program provides common operations for Istio mesh expansion for incfly@ personal purpose.
 # Hopefully some features can get into offical tooling, istioctl eventually.
 # Sample usage
-
+#
 # istiomgr init <default-project> <default-zone> <cluster-name>
 #   install config in .istiovm/ folder
-# istiomgr install <version> <helm-flag>?
+#
+# istiomgr install <version> <helm-flag> --join=<mesh-id> --vpn
 #   install istio with some options.
-# istiomgr meshexp setup <vm-instance-name>
+#
+# istiomgr meshexp setup <vm-instance-name> --platform=gcp \
+# --zone=us-central1-a
 #   setup meshexp instance.
+#
 # istiomgr meshexp add <service> <port> // invoking istioctl eventually.
 # istiomgr meshexp remove <service> // invoking istioctl eventually.
+#
+# istiomgr mesh list
 # istiomgr status // reporting istio status from .istio/ directory
 
 import argparse
 import urllib.request
 import os
+import sys
+
 
 def meshexp_handler(args):
-  print('meshexp', args)
+  print('meshexp handler', args)
 
 
 def download_url(version):
@@ -31,43 +39,58 @@ def download_url(version):
 def filename(version):
   return 'downloads/istio-%s-linux.tar.gz' % version
 
-
-def install_handler(args):
-  version = args.version
+def download_istio(version : str):
   file_name = filename(version)
-  if os.path.isfile(file_path):
+  if os.path.isfile(file_name):
     print('Istio version %s exists, skip downloading...' % version)
+    return
   print('Downloading Istio version %s' % version)
   # Download Istio first.
-  os.mkdir('downloads')
-  local_filename, headers = urllib.request.urlretrieve(
-    download_url(version), filename(version))
-  # Install Istio.
+  if not os.path.exists('downloads'):
+    os.mkdir('downloads')
+  urllib.request.urlretrieve(download_url(version), file_name)
 
-# class InstallAction(argparse.Action):
-#   def __call__(self, parser, namespace, values, option_string=None):
-#     print('jianfeih debug ', parser, namespace, values)
-  
+
+def install_istio(version : str):
+  pass
+
+
+def install_handler(args):
+  download_istio(args.version)
+  install_istio(args.version)
+
 
 def setup_parser():
   parser = argparse.ArgumentParser(
     description='istiomgr is a program for daily istio management.')
   sub_parser = parser.add_subparsers()
+
+  # istiomgr install
   install_parser = sub_parser.add_parser(
     'install',
     help='Install Istio with some option.')
   install_parser.add_argument('version', type=str,
     help='istio version to install, e.g. 1.1.2')
   install_parser.set_defaults(func=install_handler)
-  # meshexp_parser = sub_parser.add_parser('meshexp')
-  # meshexp_parser.add_argument(
-  #   'operation', type=str,
-  #   help='actions for the mesh expansion, add/remove/setup')
-  # meshexp_parser.set_defaults(func=meshexp_handler)
-  args = parser.parse_args()
-  print(args)
+
+  # meshexp
+  meshexp_parser = sub_parser.add_parser(
+    'meshexp',
+    help='Istio mesh expansion management.'
+  )
+  meshexp_parser.add_argument(
+    'operation', type=str,
+    help='actions for the mesh expansion, add/remove/setup')
+  meshexp_parser.set_defaults(func=meshexp_handler)
+  return parser
+  # args = parser.parse_args()
   # parser.func(args)
-  args.func(args)
+  # args.func(args)
 
 
-setup_parser()
+parser = setup_parser()
+if len(sys.argv) < 2:
+  parser.print_usage()
+  sys.exit(1)
+parser.parse_args()
+args.func(args)
