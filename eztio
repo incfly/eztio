@@ -23,11 +23,57 @@ import argparse
 import urllib.request
 import os
 import sys
+import subprocess
 
+
+def yes_no(answer : str):
+  yes = set(['yes','y', 'ye', ''])
+  no = set(['no','n'])
+  while True:
+    choice = input(answer + ' y/n?').lower()
+    if choice in yes:
+      return True
+    elif choice in no:
+      return False
+    else:
+      print("Please respond with Y/N")
+      
 
 def meshexp_handler(args):
-  print('meshexp handler', args)
-
+  operation = args.operation
+  vm = args.vm
+  cluster = gke_cluster_name()
+  if operation == 'init':
+    config = subprocess.Popen(
+      ('bash -x lib/common.sh meshexp_config ' + cluster).split(' '),
+      stdout=subprocess.PIPE)
+    config.wait()
+    keycert = subprocess.Popen(
+      'bash -x lib/common.sh keycert'.split(' '),
+      stdout=subprocess.PIPE)
+    keycert.wait()
+    return
+  if operation == 'setup':
+    # create instance if needed.
+    # a = ('gcloud --format="value(networkInterfaces[0].networkIP)" '
+    #   'compute instances describe ' + vm).split(' ')
+    # print('jianfeih ', a)
+    check = subprocess.Popen(
+      ('bash lib/common.sh vm_instance_ip ' + vm).split(' '),
+      stdout=subprocess.PIPE,
+      stderr=subprocess.STDOUT)
+    check.wait()
+    if check.returncode != 0:
+      if not yes_no('GCE instance does not exists, creating'):
+        print('Cant do anything, return...')
+      create = subprocess.Popen(
+        ('gcloud compute instances create ' + vm).split(' '))
+      create.wait()
+      return
+    # copy config over to the vm.
+    copy = subprocess.Popen(
+      ('bash -x lib/common.sh meshexp_copy ' + vm).split(' '))
+    copy.wait()
 
 def download_url(version):
   return (
@@ -36,8 +82,16 @@ def download_url(version):
   ).format(version)
 
 
+def gke_cluster_name():
+  kc = subprocess.Popen(
+    'kubectl config current-context'.split(' '),
+    stdout=subprocess.PIPE)
+  context = kc.stdout.readline().decode('utf-8').rstrip()
+  return context.split('_')[3]
+
 def filename(version):
   return 'downloads/istio-%s-linux.tar.gz' % version
+
 
 def download_istio(version : str):
   file_name = filename(version)
@@ -52,7 +106,9 @@ def download_istio(version : str):
 
 
 def install_istio(version : str):
-  pass
+  kube = subprocess.Popen(
+    ['bash', '-x', 'lib/common.sh', 'helm', version])
+  kube.wait()
 
 
 def install_handler(args):
@@ -65,7 +121,7 @@ def setup_parser():
     description='istiomgr is a program for daily istio management.')
   sub_parser = parser.add_subparsers()
 
-  # istiomgr install
+  # install
   install_parser = sub_parser.add_parser(
     'install',
     help='Install Istio with some option.')
@@ -80,17 +136,17 @@ def setup_parser():
   )
   meshexp_parser.add_argument(
     'operation', type=str,
-    help='actions for the mesh expansion, add/remove/setup')
+    help='actions for the mesh expansion, init/setup/add/remove')
+  meshexp_parser.add_argument(
+    '--vm', type=str,
+    help='name of the vm instance to opearate on for mesh expansion')
   meshexp_parser.set_defaults(func=meshexp_handler)
   return parser
-  # args = parser.parse_args()
-  # parser.func(args)
-  # args.func(args)
 
 
 parser = setup_parser()
 if len(sys.argv) < 2:
   parser.print_usage()
   sys.exit(1)
-parser.parse_args()
+args = parser.parse_args()
 args.func(args)

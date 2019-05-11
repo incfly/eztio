@@ -58,7 +58,9 @@ function create_gce() {
 }
 
 function vm_instance_ip() {
-  gcloud --format="value(networkInterfaces[0].networkIP)" compute instances describe  ${GCE_NAME}
+  vm=${1:-nonexisting-vm-name}
+  gcloud --format="value(networkInterfaces[0].networkIP)" \
+    compute instances describe ${vm}
 }
 
 function download() {
