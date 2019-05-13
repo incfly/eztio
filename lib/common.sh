@@ -51,20 +51,5 @@ function meshexp_copy() {
   gcloud compute scp mesh-expansion.env bin/istio-gce.sh \
     cert-chain.pem root-cert.pem cluster.env key.pem ${vm}:~
 }
+
 eval "${@:1}"
-# case $1 in
-#   helm)
-#     helm_install "${@:2}"
-#     ;;
-
-#   meshexp_keycert)
-#     meshexp_keycert "${@:2}"
-#     ;;
-
-#   meshexp_config)
-#     meshexp_config "${@:2}"
-#     ;;
-
-#   *)
-#     echo "Usage, helm | meshexp_init"
-# esac

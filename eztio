@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/python3
 # This program provides common operations for Istio mesh expansion for incfly@ personal purpose.
 # Hopefully some features can get into offical tooling, istioctl eventually.
 # Sample usage
@@ -49,7 +49,7 @@ def meshexp_handler(args):
       stdout=subprocess.PIPE)
     config.wait()
     keycert = subprocess.Popen(
-      'bash -x lib/common.sh keycert'.split(' '),
+      'bash -x lib/common.sh meshexp_keycert'.split(' '),
       stdout=subprocess.PIPE)
     keycert.wait()
     return
@@ -74,6 +74,7 @@ def meshexp_handler(args):
     copy = subprocess.Popen(
       ('bash -x lib/common.sh meshexp_copy ' + vm).split(' '))
     copy.wait()
+
 
 def download_url(version):
   return (
@@ -136,7 +137,8 @@ def setup_parser():
   )
   meshexp_parser.add_argument(
     'operation', type=str,
-    help='actions for the mesh expansion, init/setup/add/remove')
+    choices=['init', 'setup', 'add', 'remove'],
+    help='actions for the mesh expansion')
   meshexp_parser.add_argument(
     '--vm', type=str,
     help='name of the vm instance to opearate on for mesh expansion')
