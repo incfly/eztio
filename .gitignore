@@ -2,3 +2,4 @@
 *.pem
 tmp/
 downloads/
+kubedns
