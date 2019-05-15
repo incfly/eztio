@@ -3,4 +3,4 @@
 tmp/
 downloads/
 kubedns
-__pycache__
+*/__pycache__/

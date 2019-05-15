@@ -3,132 +3,33 @@
 # Hopefully some features can get into offical tooling, istioctl eventually.
 # Sample usage
 #
-# istiomgr init <default-project> <default-zone> <cluster-name>
-#   install config in .istiovm/ folder
+# eztio init <default-project> <default-zone> <cluster-name>
+#   install config in $HOME./istiocfg/ folder
 #
-# istiomgr install <version> <helm-flag> --join=<mesh-id> --vpn
+# eztio install <version> <helm-flag> --join=<mesh-id> --vpn
 #   install istio with some options.
 #
-# istiomgr meshexp setup <vm-instance-name> --platform=gcp \
-# --zone=us-central1-a
-#   setup meshexp instance.
+# eztio meshexp setup <vm-instance-name> --platform=gcp \
+#   --zone=us-central1-a
+#  setup meshexp instance.
 #
-# istiomgr meshexp add <service> <port> // invoking istioctl eventually.
-# istiomgr meshexp remove <service> // invoking istioctl eventually.
+# eztio meshexp add <service> <port> // invoking istioctl eventually.
+# eztio meshexp remove <service> // invoking istioctl eventually.
 #
-# istiomgr mesh list
-# istiomgr status // reporting istio status from .istio/ directory
+# eztio status // reporting istio status from .istio/ directory
 
 import argparse
 import urllib.request
 import os
 import sys
 import subprocess
+import lib.meshexp as meshexp
+import lib.install as install
 
-
-def yes_no(answer : str):
-  yes = set(['yes','y', 'ye', ''])
-  no = set(['no','n'])
-  while True:
-    choice = input(answer + ' y/n?').lower()
-    if choice in yes:
-      return True
-    elif choice in no:
-      return False
-    else:
-      print("Please respond with Y/N")
-
-
-def meshexp_handler(args):
-  operation = args.operation
-  vm = args.vm
-  cluster = gke_cluster_name()
-  if operation == 'init':
-    config = subprocess.Popen(
-      ('bash -x lib/common.sh meshexp_config ' + cluster).split(' '),
-      stdout=subprocess.PIPE)
-    config.wait()
-    keycert = subprocess.Popen(
-      'bash -x lib/common.sh meshexp_keycert'.split(' '),
-      stdout=subprocess.PIPE)
-    keycert.wait()
-    return
-  if operation == 'setup':
-    # create instance if needed.
-    # a = ('gcloud --format="value(networkInterfaces[0].networkIP)" '
-    #   'compute instances describe ' + vm).split(' ')
-    check = subprocess.Popen(
-      ('bash lib/common.sh vm_instance_ip ' + vm).split(' '),
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT)
-    check.wait()
-    if check.returncode != 0:
-      if not yes_no('GCE instance does not exists, creating'):
-        print('Cant do anything, return...')
-      create = subprocess.Popen(
-        ('gcloud compute instances create ' + vm).split(' '))
-      create.wait()
-      return
-    # copy config over to the vm.
-    copy = subprocess.Popen(
-      ('bash -x lib/common.sh meshexp_copy ' + vm).split(' '))
-    copy.wait()
-    # execute bash on the vm
-    exec = subprocess.Popen(
-      'gcloud compute ssh {0} -- '
-      '"sudo bash -x ./vmexec.sh meshexp_dnsinit"'.format(vm).split(' ')
-    )
-    exec.wait()
-
-
-def download_url(version):
-  return (
-    'https://github.com/istio/istio/releases/download/'
-    '{0}/istio-{0}-linux.tar.gz'
-  ).format(version)
-
-
-def gke_cluster_name():
-  kc = subprocess.Popen(
-    'kubectl config current-context'.split(' '),
-    stdout=subprocess.PIPE)
-  context = kc.stdout.readline().decode('utf-8').rstrip()
-  return context.split('_')[3]
-
-def filename(version):
-  return 'downloads/istio-%s-linux.tar.gz' % version
-
-
-def download_istio(version : str):
-  file_name = filename(version)
-  if os.path.isfile(file_name):
-    print('Istio version %s exists, skip downloading...' % version)
-    return
-  print('Downloading Istio version %s' % version)
-  # Download Istio first.
-  if not os.path.exists('downloads'):
-    os.mkdir('downloads')
-  urllib.request.urlretrieve(download_url(version), file_name)
-
-
-def install_istio(version : str):
-  kube = subprocess.Popen(
-    ['bash', '-x', 'lib/common.sh', 'helm_install', version])
-  kube.wait()
-
-
-def install_handler(args):
-  download_istio(args.version)
-  install_istio(args.version)
-
-def uninstall_handler(args):
-  kube = subprocess.Popen(
-    'bash -x lib/common.sh uninstall_istio'.split(' '))
-  kube.wait()
 
 def setup_parser():
   parser = argparse.ArgumentParser(
-    description='istiomgr is a program for daily istio management.')
+    description='eztio, make daily Istio easier...')
   sub_parser = parser.add_subparsers()
 
   # install
@@ -138,13 +39,13 @@ def setup_parser():
   install_parser.add_argument('version', type=str,
     choices=['1.1.2'],
     help='Istio version to install, e.g. 1.1.2')
-  install_parser.set_defaults(func=install_handler)
+  install_parser.set_defaults(func=install.install_handler)
 
   # uninstall
   uninstall_parser = sub_parser.add_parser(
     'uninstall',
     help='Uninstall Istio from the cluster')
-  uninstall_parser.set_defaults(func=uninstall_handler)
+  uninstall_parser.set_defaults(func=install.uninstall_handler)
 
   # meshexp
   meshexp_parser = sub_parser.add_parser(
@@ -158,11 +59,11 @@ def setup_parser():
   meshexp_parser.add_argument(
     '--vm', type=str,
     help='name of the vm instance to opearate on for mesh expansion')
-  meshexp_parser.set_defaults(func=meshexp_handler)
+  meshexp_parser.set_defaults(func=meshexp.handler)
   return parser
 
+
 if __name__ == "__main__":
-  # gcp.hello()  
   parser = setup_parser()
   if len(sys.argv) < 2:
     parser.print_usage()
