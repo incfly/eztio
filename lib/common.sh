@@ -32,12 +32,13 @@ function vm_instance_ip() {
 }
 
 function meshexp_config() {
-  cluster=${1:-gke-cluster-name}
-  connectivity=${2:-gateway}
+  local cluster=${1:-gke-cluster-name}
+  local connectivity=${2:-gateway}
+  local port=${3:-8080}
   # version=${3:-1.12}
   ISTIO_SERVICE_CIDR=$(gcloud container clusters describe ${cluster} --format "value(servicesIpv4Cidr)")
   rm -rf meshexp.env cluster.env
-  echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\nISTIO_INBOUND_PORTS=$1" > cluster.env
+  echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\nISTIO_INBOUND_PORTS=${port}" > cluster.env
   cat <<EOT >> meshexp.env
 GATEWAY_IP=$(istio_gateway_ip)
 ISTIO_DEBIAN_URL='https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE}/deb/istio-sidecar.deb'
@@ -94,7 +95,12 @@ function meshexp_keycert() {
 function meshexp_copy() {
   local vm=${1:-meshexp-vm}
   gcloud compute scp cert-chain.pem root-cert.pem \
-    vmexec.sh cluster.env key.pem meshexp.env kubedns ${vm}:~
+    lib/vmexec.sh cluster.env key.pem meshexp.env kubedns ${vm}:~
+}
+
+function meshexp_vmexec() {
+  local cmd=${1:-echo hello}
+  gcloud compute ssh abc --command "${cmd}"
 }
 
 # Script to install istio components for the raw VM.

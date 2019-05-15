@@ -31,17 +31,20 @@ def handler(args):
       if not helper.yes_no('GCE instance does not exists, creating'):
         print('Cant do anything, return...')
       create = subprocess.Popen(
-        ('gcloud compute instances create ' + vm).split(' '))
+        ('gcloud compute instances create {0} '
+        '--image-project=ubuntu-os-cloud '
+        '--image=ubuntu-1810-cosmic-v20190514').format(vm).split(' '))
       create.wait()
-      return
     # copy config over to the vm.
     copy = subprocess.Popen(
       ('bash -x lib/common.sh meshexp_copy ' + vm).split(' '))
     copy.wait()
     # execute bash on the vm
+    # cmds = ('gcloud compute ssh {0} --command '
+    #   '"sudo bash -x ~/vmexec.sh meshexp_dnsinit"').format(vm).split(' ')
+    # print('debug ', cmds)
     exec = subprocess.Popen(
-      'gcloud compute ssh {0} -- '
-      '"sudo bash -x ./vmexec.sh meshexp_dnsinit"'.format(vm).split(' ')
+      'bash -x lib/common.sh meshexp_vmexec "bash -x ~/vmexec.sh meshexp_dnsinit"'.split(' ')
     )
     exec.wait()
     return
