@@ -4,6 +4,50 @@ import subprocess
 import lib.cluster as k8s
 import lib.cli_helper as helper
 
+def service_entry():
+  f = open('service-entry.yaml', 'w')
+  f.write('''apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: {svc}-rawvm
+spec:
+   hosts:
+   - {svc}.default.svc.cluster.local
+   ports:
+   - number: 8080
+     name: {protocol}-{svc}
+     protocol: {protocol}
+   resolution: STATIC
+   endpoints:
+    - address: {ip}
+      labels:
+        registry: rawvm
+      ports:
+        {protocol}-{svc}: {port}'''.format(
+          svc='vmhttp',
+          protocol='http',
+          port=8080,
+          ip='10.128.0.17',
+        ))
+  f.close()
+
+def k8s_service():
+  f = open('k8s-service.yaml', 'w')
+  f.write('''apiVersion: v1
+kind: Service
+metadata:
+  name: {svc}
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+  selector:
+    app: httpbin
+'''.format(svc='vmhttp', port=8080))
+  f.close()
+
 def handler(args):
   operation = args.operation
   vm = args.vm
@@ -40,14 +84,18 @@ def handler(args):
       ('bash -x lib/common.sh meshexp_copy ' + vm).split(' '))
     copy.wait()
     # execute bash on the vm
-    # cmds = ('gcloud compute ssh {0} --command '
-    #   '"sudo bash -x ~/vmexec.sh meshexp_dnsinit"').format(vm).split(' ')
-    # print('debug ', cmds)
     exec = subprocess.Popen(
       'bash -x lib/common.sh meshexp_vmexec "bash -x ~/vmexec.sh meshexp_dnsinit"'.split(' ')
     )
     exec.wait()
     return
+  if operation == 'add':
+    service_entry()
+    k8s_service()
+    # add_svc = subprocess.Popen(
+    #   'bash -x lib/common.sh meshexp_addservice vmhttp 8080'.split(' ')
+    # )
+    # add_svc.wait()
   if operation == 'remove':
     remove = subprocess.Popen(
       ('gcloud compute instances delete ' + vm).split(' ')

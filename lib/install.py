@@ -3,11 +3,11 @@ import os
 import sys
 import subprocess
 
-
+# TODO: better support for OS auto detection
 def download_url(version):
   return (
     'https://github.com/istio/istio/releases/download/'
-    '{0}/istio-{0}-linux.tar.gz'
+    '{0}/istio-{0}-osx.tar.gz'
   ).format(version)
 
 

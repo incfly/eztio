@@ -25,8 +25,9 @@ function istio_gateway_ip() {
   echo $GWIP
 }
 
+# TODO: remove this hardcoded abc...
 function vm_instance_ip() {
-  vm=${1:-nonexisting-vm-name}
+  vm=${1:-abc}
   gcloud --format="value(networkInterfaces[0].networkIP)" \
     compute instances describe ${vm}
 }
@@ -101,6 +102,50 @@ function meshexp_copy() {
 function meshexp_vmexec() {
   local cmd=${1:-echo hello}
   gcloud compute ssh abc --command "${cmd}"
+}
+
+# add_service $service_name $port $protocol
+# add_service vmhttp 8080 HTTP
+function meshexp_addservice() {
+  local svc=$1
+  local port=$2
+  local ip=$(vm_instance_ip)
+  protocol={$3:-http}
+  echo "Add VM service, name = ${svc}, IP ${ip}, protocol ${protocol}"
+	kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: ${svc}-rawvm
+spec:
+   hosts:
+   - ${svc}.default.svc.cluster.local
+   ports:
+   - number: 8080
+     name: ${protocol}-${svc}
+     protocol: ${protocol}
+   resolution: STATIC
+   endpoints:
+    - address: $ip
+      labels:
+        registry: rawvm
+      ports:
+        ${protocol}-${svc}: ${port}
+EOF
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${svc}
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: ${port}
+    protocol: TCP
+  selector:
+    app: httpbin
+EOF
 }
 
 # Script to install istio components for the raw VM.
