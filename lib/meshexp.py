@@ -23,17 +23,9 @@ spec:
       labels:
         registry: rawvm
       ports:
-        {protocol}-{svc}: {port}'''.format(
-          svc='vmhttp',
-          protocol='http',
-          port=8080,
-          ip='10.128.0.17',
-        ))
-  f.close()
-
-def k8s_service():
-  f = open('k8s-service.yaml', 'w')
-  f.write('''apiVersion: v1
+        {protocol}-{svc}: {port}
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: {svc}
@@ -45,8 +37,14 @@ spec:
     protocol: TCP
   selector:
     app: httpbin
-'''.format(svc='vmhttp', port=8080))
+'''.format(
+          svc='vmhttp',
+          protocol='http',
+          port=8080,
+          ip='10.128.0.17',
+        ))
   f.close()
+
 
 def handler(args):
   operation = args.operation
@@ -91,11 +89,10 @@ def handler(args):
     return
   if operation == 'add':
     service_entry()
-    k8s_service()
-    # add_svc = subprocess.Popen(
-    #   'bash -x lib/common.sh meshexp_addservice vmhttp 8080'.split(' ')
-    # )
-    # add_svc.wait()
+    add_svc = subprocess.Popen(
+     'kubectl apply -f service-entry.yaml'.split(' ')
+    )
+    add_svc.wait()
   if operation == 'remove':
     remove = subprocess.Popen(
       ('gcloud compute instances delete ' + vm).split(' ')

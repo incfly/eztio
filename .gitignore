@@ -2,5 +2,5 @@
 *.pem
 tmp/
 downloads/
-kubedns
+output/
 */__pycache__/

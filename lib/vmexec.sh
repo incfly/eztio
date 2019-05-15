@@ -4,7 +4,8 @@ function meshexp_dnsinit() {
   # dns init
   export $(cat meshexp.env | xargs)
   # skip dns stuff first...
-  # sudo apt-get update
+  sudo apt-get update
+  sudo apt-get --no-install-recommends -y install python2
   # sudo apt-get --no-install-recommends -y install dnsmasq
   # Copy config files for DNS
   # chmod go+r "kubedns"
