@@ -16,6 +16,10 @@ function helm_install() {
   popd
 }
 
+function uninstall_istio() {
+  kubectl delete ns istio-system
+}
+
 function istio_gateway_ip() {
   GWIP=$(kubectl get -n istio-system service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
   echo $GWIP

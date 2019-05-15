@@ -81,7 +81,6 @@ def meshexp_handler(args):
     exec.wait()
 
 
-
 def download_url(version):
   return (
     'https://github.com/istio/istio/releases/download/'
@@ -114,7 +113,7 @@ def download_istio(version : str):
 
 def install_istio(version : str):
   kube = subprocess.Popen(
-    ['bash', '-x', 'lib/common.sh', 'helm', version])
+    ['bash', '-x', 'lib/common.sh', 'helm_install', version])
   kube.wait()
 
 
@@ -122,6 +121,10 @@ def install_handler(args):
   download_istio(args.version)
   install_istio(args.version)
 
+def uninstall_handler(args):
+  kube = subprocess.Popen(
+    'bash -x lib/common.sh uninstall_istio'.split(' '))
+  kube.wait()
 
 def setup_parser():
   parser = argparse.ArgumentParser(
@@ -133,8 +136,15 @@ def setup_parser():
     'install',
     help='Install Istio with some option.')
   install_parser.add_argument('version', type=str,
-    help='istio version to install, e.g. 1.1.2')
+    choices=['1.1.2'],
+    help='Istio version to install, e.g. 1.1.2')
   install_parser.set_defaults(func=install_handler)
+
+  # uninstall
+  uninstall_parser = sub_parser.add_parser(
+    'uninstall',
+    help='Uninstall Istio from the cluster')
+  uninstall_parser.set_defaults(func=uninstall_handler)
 
   # meshexp
   meshexp_parser = sub_parser.add_parser(
@@ -151,10 +161,11 @@ def setup_parser():
   meshexp_parser.set_defaults(func=meshexp_handler)
   return parser
 
-
-parser = setup_parser()
-if len(sys.argv) < 2:
-  parser.print_usage()
-  sys.exit(1)
-args = parser.parse_args()
-args.func(args)
+if __name__ == "__main__":
+  # gcp.hello()  
+  parser = setup_parser()
+  if len(sys.argv) < 2:
+    parser.print_usage()
+    sys.exit(1)
+  args = parser.parse_args()
+  args.func(args)
