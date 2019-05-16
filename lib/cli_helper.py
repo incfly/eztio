@@ -1,3 +1,6 @@
+import subprocess
+
+
 def yes_no(answer : str):
   yes = set(['yes','y', 'ye', ''])
   no = set(['no','n'])
@@ -12,3 +15,11 @@ def yes_no(answer : str):
 
 # TODO: provide util to run the bash script, error message and bash -x
 # in case when the returning result is wrong.
+
+def invoke_cmd(cmd : str):
+  invoke = subprocess.Popen(
+    cmd.split(' ')
+  )
+  print('Running command: %s ' % cmd)
+  invoke.wait()
+  

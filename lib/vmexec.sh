@@ -12,7 +12,7 @@ function meshexp_dnsinit() {
   # sudo cp "kubedns" /etc/dnsmasq.d
   # sudo systemctl restart dnsmasq
   echo "$GATEWAY_IP istio-citadel istio-pilot istio-pilot.istio-system" | sudo tee -a /etc/hosts
-  curl "https://storage.googleapis.com/istio-release/releases/1.1.0/deb/istio-sidecar.deb"  -L > istio-sidecar.deb
+  curl ${ISTIO_DEBIAN_URL}  -L > istio-sidecar.deb
   sudo dpkg -i istio-sidecar.deb
   sudo mkdir -p /etc/certs /var/lib/istio/envoy
   sudo cp {root-cert.pem,cert-chain.pem,key.pem} /etc/certs

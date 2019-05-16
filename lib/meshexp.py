@@ -4,17 +4,20 @@ import subprocess
 import lib.cluster as k8s
 import lib.cli_helper as helper
 
-def service_entry():
-  f = open('service-entry.yaml', 'w')
+def service_entry(vmname, svc : str, port : int, protocol : str,
+  namespace='default'):
+  vm_ip = instance_ip(vmname)
+  file_name = 'output/meshexp-{0}.yaml'.format(svc)
+  f = open(file_name, 'w')
   f.write('''apiVersion: networking.istio.io/v1alpha3
 kind: ServiceEntry
 metadata:
   name: {svc}-rawvm
 spec:
    hosts:
-   - {svc}.default.svc.cluster.local
+   - {svc}.{namespace}.svc.cluster.local
    ports:
-   - number: 8080
+   - number: {port}
      name: {protocol}-{svc}
      protocol: {protocol}
    resolution: STATIC
@@ -29,26 +32,35 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {svc}
-  namespace: default
+  namespace: {namespace}
 spec:
   ports:
   - name: http
-    port: 8080
+    port: {port}
     protocol: TCP
-  selector:
-    app: httpbin
 '''.format(
-          svc='vmhttp',
+          svc=svc,
           protocol='http',
           port=8080,
-          ip='10.128.0.17',
+          ip=vm_ip,
+          namespace=namespace
         ))
   f.close()
+  return file_name
+
+def instance_ip(name : str):
+  ip = subprocess.Popen(
+    'bash -x lib/common.sh vm_instance_ip {0}'.format(name).split(' '),
+    stdout=subprocess.PIPE
+  )
+  ip_value = ip.stdout.readlines()[0].decode('utf-8').rstrip()
+  return ip_value
 
 
 def handler(args):
   operation = args.operation
   vm = args.vm
+  namespace = args.namespace
   cluster = k8s.gke_cluster_name()
   if operation == 'init':
     config = subprocess.Popen(
@@ -62,8 +74,6 @@ def handler(args):
     return
   if operation == 'setup':
     # create instance if needed.
-    # a = ('gcloud --format="value(networkInterfaces[0].networkIP)" '
-    #   'compute instances describe ' + vm).split(' ')
     check = subprocess.Popen(
       ('bash lib/common.sh vm_instance_ip ' + vm).split(' '),
       stdout=subprocess.PIPE,
@@ -78,21 +88,16 @@ def handler(args):
         '--image=ubuntu-1810-cosmic-v20190514').format(vm).split(' '))
       create.wait()
     # copy config over to the vm.
-    copy = subprocess.Popen(
-      ('bash -x lib/common.sh meshexp_copy ' + vm).split(' '))
-    copy.wait()
+    helper.invoke_cmd('bash -x lib/common.sh meshexp_copy %s' % vm)
     # execute bash on the vm
-    exec = subprocess.Popen(
-      'bash -x lib/common.sh meshexp_vmexec "bash -x ~/vmexec.sh meshexp_dnsinit"'.split(' ')
-    )
-    exec.wait()
+    helper.invoke_cmd('bash -x lib/common.sh meshexp_vmexec "bash -x ~/vmexec.sh meshexp_dnsinit"')
     return
   if operation == 'add':
-    service_entry()
-    add_svc = subprocess.Popen(
-     'kubectl apply -f service-entry.yaml'.split(' ')
+    yaml = service_entry(
+      vmname=vm, svc='vmhttp',
+      port=8080, protocol='http',
     )
-    add_svc.wait()
+    helper.invoke_cmd('kubectl apply -f %s' % yaml)
   if operation == 'remove':
     remove = subprocess.Popen(
       ('gcloud compute instances delete ' + vm).split(' ')

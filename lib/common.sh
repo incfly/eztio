@@ -42,7 +42,7 @@ function meshexp_config() {
   echo -e "ISTIO_CP_AUTH=MUTUAL_TLS\nISTIO_SERVICE_CIDR=$ISTIO_SERVICE_CIDR\nISTIO_INBOUND_PORTS=${port}" > cluster.env
   cat <<EOT >> meshexp.env
 GATEWAY_IP=$(istio_gateway_ip)
-ISTIO_DEBIAN_URL='https://storage.googleapis.com/istio-release/releases/${ISTIO_RELEASE}/deb/istio-sidecar.deb'
+ISTIO_DEBIAN_URL='https://storage.googleapis.com/istio-release/releases/1.1.2/deb/istio-sidecar.deb'
 EOT
   # Multiple tries, it may take some time until the controllers generate the IPs
   if [ "${connectivity}" == "ilb" ]; then
@@ -103,105 +103,5 @@ function meshexp_vmexec() {
   local cmd=${1:-echo hello}
   gcloud compute ssh abc --command "${cmd}"
 }
-
-# add_service $service_name $port $protocol
-# add_service vmhttp 8080 HTTP
-function meshexp_addservice() {
-  local svc=$1
-  local port=$2
-  local ip=$(vm_instance_ip)
-  protocol={$3:-http}
-  echo "Add VM service, name = ${svc}, IP ${ip}, protocol ${protocol}"
-	kubectl apply -f - <<EOF
-apiVersion: networking.istio.io/v1alpha3
-kind: ServiceEntry
-metadata:
-  name: ${svc}-rawvm
-spec:
-   hosts:
-   - ${svc}.default.svc.cluster.local
-   ports:
-   - number: 8080
-     name: ${protocol}-${svc}
-     protocol: ${protocol}
-   resolution: STATIC
-   endpoints:
-    - address: $ip
-      labels:
-        registry: rawvm
-      ports:
-        ${protocol}-${svc}: ${port}
-EOF
-  kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${svc}
-  namespace: default
-spec:
-  ports:
-  - name: http
-    port: ${port}
-    protocol: TCP
-  selector:
-    app: httpbin
-EOF
-}
-
-# Script to install istio components for the raw VM.
-
-# Environment variable pointing to the generated Istio configs and binaries.
-# TODO: use curl or tar to fetch the artifacts.
-ISTIO_STAGING=${ISTIO_STAGING:-.}
-
-function istioVersionSource() {
-  echo "Sourced ${ISTIO_STAGING}/istio.VERSION"
-  cat "${ISTIO_STAGING}/istio.VERSION"
-  # shellcheck disable=SC1090
-  source "${ISTIO_STAGING}/istio.VERSION"
-}
-
-function istioInstall() {
-  echo "*** Fetching istio packages..."
-  # Current URL for the debian files artifacts. Will be replaced by a proper apt repo.
-  rm -f istio-sidecar.deb
-  curl -f -L "${PILOT_DEBIAN_URL}/istio-sidecar.deb" > "${ISTIO_STAGING}/istio-sidecar.deb"
-
-  # Install istio binaries
-  dpkg -i "${ISTIO_STAGING}/istio-sidecar.deb"
-  mkdir -p /etc/certs
-  cp ${ISTIO_STAGING}/*.pem /etc/certs
-
-  # Cluster settings - the CIDR in particular.
-  cp "${ISTIO_STAGING}/cluster.env" /var/lib/istio/envoy
-
-  chown -R istio-proxy /etc/certs
-  chown -R istio-proxy /var/lib/istio/envoy
-
-  # Useful to test VM extension to istio
-  apt-get --no-install-recommends -y install host
-}
-
-function istioRestart() {
-  systemctl restart istio-auth-node-agent
-  systemctl restart istio
-}
-
-# if [[ ${1:-} == "initNetwork" ]] ; then
-#   istioNetworkInit
-# elif [[ ${1:-} == "istioInstall" ]] ; then
-#   istioVersionSource
-#   istioInstall
-#   istioRestart
-# elif [[ ${1:-} == "help" ]] ; then
-#   echo "$0 initNetwork: Configure DNS"
-#   echo "$0 istioInstall: Install istio components"
-# else
-#   istioVersionSource
-#   istioNetworkInit
-#   istioInstall
-#   istioRestart
-# fi
-
 
 eval "${@:1}"

@@ -32,6 +32,11 @@ def setup_parser():
     description='eztio, make daily Istio easier...')
   sub_parser = parser.add_subparsers()
 
+  parser.add_argument('-n',
+    '--namespace',
+    default='default',
+    help='Namespace for the operation'
+  )
   # install
   install_parser = sub_parser.add_parser(
     'install',
@@ -59,6 +64,23 @@ def setup_parser():
   meshexp_parser.add_argument(
     '--vm', type=str,
     help='name of the vm instance to opearate on for mesh expansion')
+  meshexp_parser.add_argument(
+    '--port', type=str,
+    default='8080:http',
+    help='8080:http,9090:tcp'
+  )
+  meshexp_parser.add_argument(
+    '-svc',
+    '--service',
+    default='vmhttp',
+    help='the service name used for the mesh expansion'
+  )
+  meshexp_parser.add_argument(
+    '-sa',
+    '--service-account',
+    default='default',
+    help='the service account for the mesh expansion',
+  )
   meshexp_parser.set_defaults(func=meshexp.handler)
   return parser
 
