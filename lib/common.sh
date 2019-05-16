@@ -65,23 +65,6 @@ EOT
   fi
 
   echo "Pilot IP, Istio DNS ${ISTIO_DNS}, mixer ${MIXER_IP}, citadel ${CITADEL_IP}"
-
-  #/etc/dnsmasq.d/kubedns
-  {
-    # DNS does not work fro Gateway based model since that requires mTLS.
-    # We might need to configure dnsmasq differently.
-    echo "server=/svc.cluster.local/$ISTIO_DNS"
-    echo "address=/istio-policy/$MIXER_IP"
-    echo "address=/istio-telemetry/$MIXER_IP"
-    echo "address=/istio-pilot/$PILOT_IP"
-    echo "address=/istio-citadel/$CITADEL_IP"
-    # Also generate host entries for the istio-system. The generated config will work with both
-    # 'cluster-wide' and 'per-namespace'.
-    echo "address=/istio-policy.istio-system/$MIXER_IP"
-    echo "address=/istio-telemetry.istio-system/$MIXER_IP"
-    echo "address=/istio-pilot.istio-system/$PILOT_IP"
-    echo "address=/istio-citadel.istio-system/$CITADEL_IP"
-  } > kubedns
 }
 
 function meshexp_keycert() {
@@ -96,7 +79,7 @@ function meshexp_keycert() {
 function meshexp_copy() {
   local vm=${1:-meshexp-vm}
   gcloud compute scp cert-chain.pem root-cert.pem \
-    lib/vmexec.sh cluster.env key.pem meshexp.env kubedns ${vm}:~
+    lib/vmexec.sh cluster.env key.pem meshexp.env ${vm}:~
 }
 
 function meshexp_vmexec() {
